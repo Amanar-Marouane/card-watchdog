@@ -1,0 +1,4 @@
+db.url=jdbc:mariadb://localhost:3306/
+db.user=root
+db.password=password
+db.dbName=`card-watchdog`
