@@ -1,4 +1,4 @@
-package com.cardwatchdog.config;
+package config;
 
 import java.io.InputStream;
 import java.util.Properties;
@@ -8,13 +8,13 @@ public class ConfigLoader {
 
     static {
         try (InputStream input = ConfigLoader.class.getClassLoader()
-                .getResourceAsStream("database.properties")) {
+                .getResourceAsStream("application.properties")) {
             if (input == null) {
-                throw new RuntimeException("database.properties not found! Copy database.properties.example");
+                throw new RuntimeException("application.properties not found! Copy application.properties.example");
             }
             props.load(input);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to load database.properties", e);
+            throw new RuntimeException("Failed to load application.properties", e);
         }
     }
 

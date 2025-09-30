@@ -2,13 +2,13 @@
 
 ## Setup and Running Instructions
 
-### 1. Configure Database
-First, copy the database configuration file:
+### 1. Configure Environment
+First, copy the environment configuration file:
 ```bash
-cp src/main/resources/database.properties.example src/main/resources/database.properties
+cp src/main/resources/application.properties.example src/main/resources/application.properties
 ```
 
-Edit `src/main/resources/database.properties` with your actual database credentials.
+Edit `src/main/resources/application.properties` with your actual environment credentials.
 
 ### 2. Compile the Project
 ```bash
@@ -17,7 +17,7 @@ mvn compile
 
 ### 3. Run the Application
 ```bash
-mvn exec:java -Dexec.mainClass="com.cardwatchdog.Main"
+mvn exec:java -Dexec.mainClass="www.Main"
 ```
 
 ## Requirements

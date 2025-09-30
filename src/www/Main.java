@@ -1,7 +1,7 @@
-package com.cardwatchdog;
+package www;
 
-import com.cardwatchdog.config.ConfigLoader;
-import com.cardwatchdog.services.MySQLConnection;
+import config.ConfigLoader;
+import services.MySQLConnection;
 
 public class Main {
     private static MySQLConnection connection;
