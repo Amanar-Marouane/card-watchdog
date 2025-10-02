@@ -1,31 +1,54 @@
 package www;
 
 import config.ConfigLoader;
-import services.MySQLConnection;
+import repositories.UserRepository;
+import services.AuthService;
+import services.DBConnection;
+import ui.ConsoleUi;
 
 public class Main {
-    private static MySQLConnection connection;
+    private static DBConnection connection;
+    private static AuthService authService;
+    private static UserRepository userRepository;
 
     public static void main(String[] args) {
+        // Load configuration
         configureDatabaseConnection();
+
+        // Test DB connection
         databaseTest();
+
+        // Initialize repositories and services
+        reposInit();
+
+        // Start the application
+        ConsoleUi menu = new ConsoleUi(authService);
+        menu.run();
+
+        // Exit the application
+        ConsoleUi.exit(0);
     }
 
-    public static void configureDatabaseConnection() {
+    private static void configureDatabaseConnection() {
         String url = ConfigLoader.get("db.url");
         String user = ConfigLoader.get("db.user");
         String password = ConfigLoader.get("db.password");
         String dbName = ConfigLoader.get("db.dbName");
-        connection = new MySQLConnection(url, user, password, dbName);
+        connection = new DBConnection(url, user, password, dbName);
     }
 
-    public static void databaseTest() {
+    private static void databaseTest() {
         try {
             connection.getConnection();
             System.out.println("Database connection test successful.");
-            connection.closeConnection();
         } catch (Exception e) {
             e.printStackTrace();
+            ConsoleUi.exit(1);
         }
+    }
+
+    private static void reposInit() {
+        userRepository = new UserRepository(connection);
+        authService = new AuthService(userRepository);
     }
 }
