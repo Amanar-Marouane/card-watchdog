@@ -8,19 +8,19 @@ import enums.OperationType;
 public record CardOperation(
         UUID id,
         LocalDateTime date,
-        double montant,
-        String type, // String for DB/reflection compatibility
-        String lieu,
-        int idCarte) { // Changed from UUID to int
+        double amount,
+        String type,
+        String location,
+        int cardId) {
     public static final String TABLE_NAME = "card_operations";
 
-    public CardOperation(LocalDateTime date, double montant, String type, String lieu, int idCarte) {
-        this(UUID.randomUUID(), date, montant, type, lieu, idCarte);
+    public CardOperation(LocalDateTime date, double amount, String type, String location, int cardId) {
+        this(UUID.randomUUID(), date, amount, type, location, cardId);
     }
 
     // Constructor with enum for business logic convenience
-    public CardOperation(LocalDateTime date, double montant, OperationType type, String lieu, int idCarte) {
-        this(UUID.randomUUID(), date, montant, type.name(), lieu, idCarte);
+    public CardOperation(LocalDateTime date, double amount, OperationType type, String location, int cardId) {
+        this(UUID.randomUUID(), date, amount, type.name(), location, cardId);
     }
 
     public OperationType getTypeEnum() {

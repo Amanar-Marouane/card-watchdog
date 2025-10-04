@@ -17,7 +17,7 @@ public class AuthService {
         this.authenticated = false;
     }
 
-    public boolean register(String fullName, String email, String phoneNumber, String password) {
+    public boolean register(String fullName, String email, String phoneNumber) {
         if (this.authenticated) {
             Console.warning("You must log out first before registering a new account.");
             return false;
@@ -33,8 +33,7 @@ public class AuthService {
             userRepository.create(Map.of(
                     "name", fullName,
                     "email", email,
-                    "phone_number", phoneNumber,
-                    "password", password));
+                    "phone_number", phoneNumber));
 
             Console.success("Registration successful!");
             return true;
@@ -44,7 +43,7 @@ public class AuthService {
         }
     }
 
-    public boolean login(String email, String password) {
+    public boolean login(String email) {
         if (this.authenticated) {
             Console.warning("You are already logged in. Please log out first.");
             return false;
@@ -53,11 +52,6 @@ public class AuthService {
         Optional<User> user = userRepository.findByEmail(email);
         if (user.isEmpty()) {
             Console.error("Login failed: User not found.");
-            return false;
-        }
-
-        if (!user.get().password().equals(password)) {
-            Console.error("Login failed: Incorrect password.");
             return false;
         }
 

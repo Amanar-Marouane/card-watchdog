@@ -23,10 +23,6 @@ public class AuthController {
             return fullName != null && fullName.trim().length() >= 2;
         }
 
-        public static boolean isValidPassword(String password) {
-            return password != null && password.length() >= 6;
-        }
-
         public static boolean isValidPhoneNumber(String phoneNumber) {
             return phoneNumber != null && phoneNumber.matches("^\\+?[0-9]{7,15}$");
         }
@@ -38,16 +34,6 @@ public class AuthController {
         registry.put("email", this.emailAttempt());
         registry.put("phone_number", this.phoneNumberAttempt());
         registry.put("fullName", this.fullNameAttempt());
-        registry.put("password", this.passwordAttempt());
-
-        return registry;
-    }
-
-    private HashMap<String, String> loginAttempt() {
-        HashMap<String, String> registry = new HashMap<>();
-
-        registry.put("email", this.emailAttempt());
-        registry.put("password", this.passwordAttempt());
 
         return registry;
     }
@@ -82,37 +68,23 @@ public class AuthController {
         return fullName;
     }
 
-    private String passwordAttempt() {
-        String password;
-        do {
-            password = Console.ask("=> Enter a password");
-            if (!Validator.isValidPassword(password))
-                Console.error("Invalid password");
-        } while (!Validator.isValidPassword(password));
-
-        return password;
-    }
-
     public void register() {
         Console.info("Processing registration...");
 
         HashMap<String, String> register = this.registerAttempt();
         String fullName = register.get("fullName");
         String email = register.get("email");
-        String password = register.get("password");
         String phoneNumber = register.get("phone_number");
 
-        authService.register(fullName, email, phoneNumber, password);
+        authService.register(fullName, email, phoneNumber);
     }
 
     public void login() {
         Console.info("Processing login...");
 
-        HashMap<String, String> login = this.loginAttempt();
-        String email = login.get("email");
-        String password = login.get("password");
+        String email = this.emailAttempt();
 
-        authService.login(email, password);
+        authService.login(email);
     }
 
     public void logout() {

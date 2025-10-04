@@ -4,7 +4,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import utils.Callback;
+import utils.VoidCallback;
+
 public interface RepositoryBase<T> {
+
+    default <R> R pipeline(Callback<R> c) {
+        try {
+            return c.run();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    default void pipeline(VoidCallback c) {
+        try {
+            c.run();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     /**
      * Retrieve all entities.
@@ -34,7 +53,7 @@ public interface RepositoryBase<T> {
      * @param entity
      * @param fieldsToUpdate
      */
-    T updateById(String id, Map<String, Object> fieldsToUpdate);
+    void updateById(T entity, Map<String, Object> fieldsToUpdate);
 
     /**
      * Delete an entity from the repository.
@@ -42,4 +61,5 @@ public interface RepositoryBase<T> {
      * @param entity
      */
     void deleteById(String id);
+
 }

@@ -21,23 +21,21 @@ public class UserRepository implements RepositoryBase<User> {
 
     @Override
     public Optional<User> findById(String id) {
-        try {
+        return pipeline(() -> {
             var conn = connectionService.getConnection();
             var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME + " WHERE id = ? LIMIT 1");
             stmt.setString(1, id);
             var rs = stmt.executeQuery();
             if (rs.next()) {
-                return Optional.of(Hydrator.mapRow(rs, User.class));
+                return Optional.ofNullable(Hydrator.mapRow(rs, User.class));
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        return Optional.empty();
+            return Optional.empty();
+        });
     }
 
     @Override
     public List<User> findAll() {
-        try {
+        return pipeline(() -> {
             var conn = connectionService.getConnection();
             var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME);
             var rs = stmt.executeQuery();
@@ -46,14 +44,12 @@ public class UserRepository implements RepositoryBase<User> {
                 users.add(Hydrator.mapRow(rs, User.class));
             }
             return users;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
     }
 
     @Override
     public User create(Map<String, Object> data) {
-        try {
+        return pipeline(() -> {
             // Exclude ID if present
             Map<String, Object> filteredData = data.entrySet().stream()
                     .filter(e -> !"id".equals(e.getKey()))
@@ -81,81 +77,59 @@ public class UserRepository implements RepositoryBase<User> {
             try (var generatedKeys = stmt.getGeneratedKeys()) {
                 if (generatedKeys.next()) {
                     int id = generatedKeys.getInt(1);
-                    return new User(
-                            id,
-                            (String) data.get("name"),
-                            (String) data.get("email"),
-                            (String) data.get("phone_number"),
-                            (String) data.get("password"));
-                } else {
+                    filteredData.put("id", id);
+                    return Hydrator.mapRow(filteredData, User.class);
+                } else
                     throw new Exception("Creating user failed, no ID obtained.");
-                }
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
     }
 
     @Override
     public void deleteById(String id) {
-        try {
+        pipeline(() -> {
             var conn = connectionService.getConnection();
             var stmt = conn.prepareStatement("DELETE FROM " + TABLE_NAME + " WHERE id = ?");
             stmt.setString(1, id);
             stmt.executeUpdate();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        });
     }
 
     @Override
-    public User updateById(String id, Map<String, Object> fieldsToUpdate) {
-        // Prevent modifying the ID
-        if (fieldsToUpdate.containsKey("id")) {
-            fieldsToUpdate.remove("id");
-        }
+    public void updateById(User user, Map<String, Object> fieldsToUpdate) {
+        final User[] userRef = { user };
 
+        fieldsToUpdate.remove("id"); // prevent ID modification
         if (fieldsToUpdate.isEmpty())
-            return null; // nothing to update
+            return;
 
-        try {
+        userRef[0] = pipeline(() -> {
             var conn = connectionService.getConnection();
 
-            // Build SET clause: "name = ?, age = ?, ..."
+            // Build SET clause
             var setClause = fieldsToUpdate.keySet().stream()
                     .map(field -> field + " = ?")
                     .collect(Collectors.joining(", "));
 
-            // Prepare statement
             var stmt = conn.prepareStatement(
                     "UPDATE " + TABLE_NAME + " SET " + setClause + " WHERE id = ?");
 
-            // Set parameters for the fields
             int index = 1;
             for (Object value : fieldsToUpdate.values()) {
                 stmt.setObject(index++, value);
             }
+            stmt.setObject(index, user.id());
 
-            // Set the ID parameter
-            stmt.setObject(index, id);
-
-            // Execute update
             stmt.executeUpdate();
 
-            return new User(
-                    Integer.parseInt(id),
-                    (String) fieldsToUpdate.get("name"),
-                    (String) fieldsToUpdate.get("email"),
-                    (String) fieldsToUpdate.get("phone_number"),
-                    (String) fieldsToUpdate.get("password"));
-
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+            // Return updated immutable user
+            fieldsToUpdate.put("id", user.id());
+            return Hydrator.mapRow(fieldsToUpdate, User.class);
+        });
     }
 
     public Optional<User> findByEmail(String email) {
-        try {
+        return pipeline(() -> {
             var conn = connectionService.getConnection();
             var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME + " WHERE email = ? LIMIT 1");
             stmt.setString(1, email);
@@ -163,10 +137,8 @@ public class UserRepository implements RepositoryBase<User> {
             if (rs.next()) {
                 return Optional.of(Hydrator.mapRow(rs, User.class));
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        return Optional.empty();
+            return Optional.empty();
+        });
     }
 
 }

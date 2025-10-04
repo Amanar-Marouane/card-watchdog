@@ -1,18 +1,22 @@
 package ui;
 
 import controllers.AuthController;
+import controllers.CardController;
 import entities.User;
 import services.AuthService;
+import services.CardService;
 import utils.Console;
 
 public class ConsoleUi {
 
     private final AuthService auth;
     private final AuthController authController;
+    private final CardController cardController;
 
-    public ConsoleUi(AuthService auth) {
+    public ConsoleUi(AuthService auth, CardService cardService) {
         this.auth = auth;
         this.authController = new AuthController(auth);
+        this.cardController = new CardController(cardService);
     }
 
     public void run() {
@@ -61,6 +65,7 @@ public class ConsoleUi {
             Console.info("Choose an option:");
             Console.info("  1) Logout");
             Console.info("  2) View Profile");
+            Console.info("  3) Manage Cards");
             Console.info("  0) Exit");
             Console.line();
 
@@ -74,6 +79,9 @@ public class ConsoleUi {
                 case "2":
                     authController.profile(u);
                     break;
+                case "3":
+                    showCardMenu(u);
+                    break;
                 default:
                     Console.error("Invalid option!");
                     break;
@@ -81,6 +89,45 @@ public class ConsoleUi {
         } catch (Exception e) {
             Console.error(e.getMessage());
             return;
+        }
+    }
+
+    private void showCardMenu(User user) {
+        while (true) {
+            Console.line();
+            Console.info("Card Management");
+            Console.info("Choose an option:");
+            Console.info("  1) View My Cards");
+            Console.info("  2) View Card Details");
+            Console.info("  3) Add New Card");
+            Console.info("  4) Manage Card Status");
+            Console.info("  5) Delete Card");
+            Console.info("  0) Back to Main Menu");
+            Console.line();
+
+            String opt = Console.ask("Enter choice: ");
+            switch (opt) {
+                case "0":
+                    return;
+                case "1":
+                    cardController.index(user);
+                    break;
+                case "2":
+                    cardController.show(user);
+                    break;
+                case "3":
+                    cardController.create(user);
+                    break;
+                case "4":
+                    cardController.update(user);
+                    break;
+                case "5":
+                    cardController.delete(user);
+                    break;
+                default:
+                    Console.error("Invalid option!");
+                    break;
+            }
         }
     }
 

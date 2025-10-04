@@ -1,24 +1,25 @@
 package entities;
 
 import java.util.UUID;
-import enums.CardType;
+
 import enums.CardStatus;
+import enums.CardType;
 
 abstract public sealed class Card permits CreditCard, DebitCard, PrepaidCard {
-    public static final String TABLE_NAME = "cards";
     private int id;
-    private UUID cardNumber;
-    private String expirationDate;
+    private UUID card_number;
+    private String expiration_date;
     private String status; // String for DB/reflection compatibility
-    private String cardType; // String for DB/reflection compatibility
-    private int userId;
+    private String card_type; // String for DB/reflection compatibility
+    private int user_id;
 
-    public Card(String expirationDate, String status, String cardType, int userId) {
-        this.cardNumber = UUID.randomUUID();
-        this.expirationDate = expirationDate;
+    public Card(int id, String expirationDate, String status, String cardType, int userId) {
+        this.id = id;
+        this.card_number = UUID.randomUUID();
+        this.expiration_date = expirationDate;
         this.status = status;
-        this.cardType = cardType;
-        this.userId = userId;
+        this.card_type = cardType;
+        this.user_id = userId;
     }
 
     public int getId() {
@@ -26,11 +27,11 @@ abstract public sealed class Card permits CreditCard, DebitCard, PrepaidCard {
     }
 
     public UUID getCardNumber() {
-        return cardNumber;
+        return card_number;
     }
 
     public String getExpirationDate() {
-        return expirationDate;
+        return expiration_date;
     }
 
     public String getStatus() {
@@ -38,11 +39,11 @@ abstract public sealed class Card permits CreditCard, DebitCard, PrepaidCard {
     }
 
     public String getCardType() {
-        return cardType;
+        return card_type;
     }
 
     public int getUserId() {
-        return userId;
+        return user_id;
     }
 
     public void setId(int id) {
@@ -50,11 +51,11 @@ abstract public sealed class Card permits CreditCard, DebitCard, PrepaidCard {
     }
 
     public void setCardNumber(UUID cardNumber) {
-        this.cardNumber = cardNumber;
+        this.card_number = cardNumber;
     }
 
     public void setExpirationDate(String expirationDate) {
-        this.expirationDate = expirationDate;
+        this.expiration_date = expirationDate;
     }
 
     public void setStatus(String status) {
@@ -62,11 +63,11 @@ abstract public sealed class Card permits CreditCard, DebitCard, PrepaidCard {
     }
 
     public void setCardType(String cardType) {
-        this.cardType = cardType;
+        this.card_type = cardType;
     }
 
     public void setUserId(int userId) {
-        this.userId = userId;
+        this.user_id = userId;
     }
 
     // Enum helper methods for business logic
@@ -75,7 +76,7 @@ abstract public sealed class Card permits CreditCard, DebitCard, PrepaidCard {
     }
 
     public CardType getCardTypeEnum() {
-        return CardType.valueOf(cardType);
+        return CardType.valueOf(card_type);
     }
 
     public void setStatus(CardStatus status) {
@@ -83,7 +84,7 @@ abstract public sealed class Card permits CreditCard, DebitCard, PrepaidCard {
     }
 
     public void setCardType(CardType cardType) {
-        this.cardType = cardType.name();
+        this.card_type = cardType.name();
     }
 
 }

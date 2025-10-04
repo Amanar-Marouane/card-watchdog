@@ -7,20 +7,20 @@ import enums.AlertLevel;
 public record FraudAlert(
         UUID id,
         String description,
-        String niveau, // String for DB/reflection compatibility
-        int idCarte) { // Changed from UUID to int
+        String level,
+        int cardId) {
     public static final String TABLE_NAME = "fraud_alerts";
 
-    public FraudAlert(String description, String niveau, int idCarte) {
-        this(UUID.randomUUID(), description, niveau, idCarte);
+    public FraudAlert(String description, String level, int cardId) {
+        this(UUID.randomUUID(), description, level, cardId);
     }
 
     // Constructor with enum for business logic convenience
-    public FraudAlert(String description, AlertLevel niveau, int idCarte) {
-        this(UUID.randomUUID(), description, niveau.name(), idCarte);
+    public FraudAlert(String description, AlertLevel level, int cardId) {
+        this(UUID.randomUUID(), description, level.name(), cardId);
     }
 
-    public AlertLevel getNiveauEnum() {
-        return AlertLevel.valueOf(niveau);
+    public AlertLevel getLevelEnum() {
+        return AlertLevel.valueOf(level);
     }
 }
