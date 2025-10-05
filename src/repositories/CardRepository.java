@@ -18,10 +18,9 @@ import entities.PrepaidCard;
 import enums.CardType;
 import services.DBConnection;
 import utils.CaseConverter;
-import utils.Console;
 import utils.Hydrator;
 
-public class CardRepository implements RepositoryBase<Card> {
+public class CardRepository extends RepositoryBase implements RepositoryContract<Card> {
     public static final String TABLE_NAME = "cards";
     public final DBConnection connection;
 
@@ -31,7 +30,7 @@ public class CardRepository implements RepositoryBase<Card> {
 
     @Override
     public Optional<Card> findById(String id) {
-        return pipeline(() -> {
+        return executeSafely(() -> {
             var conn = connection.getConnection();
             var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE id = ? LIMIT 1", id);
 
@@ -44,7 +43,7 @@ public class CardRepository implements RepositoryBase<Card> {
 
     @Override
     public List<Card> findAll() {
-        return pipeline(() -> {
+        return executeSafely(() -> {
             var conn = connection.getConnection();
             var rs = executeQuery(conn, "SELECT * from " + TABLE_NAME);
             List<Card> cards = new ArrayList<>();
@@ -75,12 +74,12 @@ public class CardRepository implements RepositoryBase<Card> {
      */
     private <T extends Card> T fetchSupType(Connection conn, String id, Class<T> clazz, String table, ResultSet baseRow)
             throws Exception {
-        return pipeline(() -> {
+        return executeSafely(() -> {
             var rs = executeQuery(conn, "SELECT * FROM " + table + " WHERE card_id = ?", id);
 
             if (rs.next()) {
-                Map<String, Object> baseMap = Hydrator.toMap(baseRow);
-                Map<String, Object> subMap = Hydrator.toMap(rs);
+                Map<String, Object> baseMap = Hydrator.resultSetToMap(baseRow);
+                Map<String, Object> subMap = Hydrator.resultSetToMap(rs);
                 baseMap.putAll(subMap);
                 return Hydrator.mapRow(baseMap, clazz);
             } else {
@@ -91,20 +90,20 @@ public class CardRepository implements RepositoryBase<Card> {
 
     @Override
     public Card create(Map<String, Object> data) {
-        return pipeline(() -> {
-            Map<String, Object> filteredData = filterToCOU(new HashMap<>(data));
+        return executeSafely(() -> {
+            Map<String, Object> filteredData = filterID(data);
 
             if (!filteredData.containsKey("card_type"))
                 throw new Exception("No card type provided");
 
-            Map<String, Object> offer = getOffer(new HashMap<>(filteredData));
+            Map<String, Object> offer = getOffer(filteredData);
             filteredData.remove("offer");
 
             // Insert base card record and get ID
             int cardId = insertBaseCard(filteredData);
 
             // Insert subtype data and get complete card object
-            return insertSubTypeCard(cardId, offer, data);
+            return insertSubTypeCard(cardId, offer, filteredData);
         });
     }
 
@@ -142,22 +141,19 @@ public class CardRepository implements RepositoryBase<Card> {
      */
     private Card insertSubTypeCard(int cardId, Map<String, Object> offerData, Map<String, Object> cardData)
             throws Exception {
-        offerData.put("card_id", cardId);
+        Map<String, Object> subCardData = new HashMap<>(offerData);
+        subCardData.put("card_id", cardId);
         CardType ct = CardType.valueOf(cardData.get("card_type").toString());
         var conn = connection.getConnection();
 
-        String fields = fieldsOf(offerData);
-        String bindingTemplate = bindingTemplateOf(offerData);
+        String fields = fieldsOf(subCardData);
+        String bindingTemplate = bindingTemplateOf(subCardData);
         String tableName = getTableNameByType(ct);
-
-        Console.info("Fields: " + fields);
-        Console.info("Table: " + tableName);
-        Console.info("Binding template: " + bindingTemplate);
 
         var stmt = conn.prepareStatement("INSERT INTO " + tableName + " " + fields + " VALUES " + bindingTemplate);
 
         int index = 1;
-        for (Object value : offerData.values()) {
+        for (Object value : subCardData.values()) {
             stmt.setObject(index++, value);
         }
 
@@ -165,7 +161,7 @@ public class CardRepository implements RepositoryBase<Card> {
 
         // Combine data for hydration
         Map<String, Object> mergedData = new HashMap<>(cardData);
-        mergedData.putAll(offerData);
+        mergedData.putAll(subCardData);
         mergedData.put("id", cardId);
 
         return createCardInstance(ct, mergedData);
@@ -202,13 +198,13 @@ public class CardRepository implements RepositoryBase<Card> {
     }
 
     @Override
-    public void update(Card entity, Map<String, Object> fieldsToUpdate) {
-        if (fieldsToUpdate.isEmpty())
+    public void update(Card entity, Map<String, Object> data) {
+        if (data.isEmpty())
             return;
-
+        Map<String, Object> fieldsToUpdate = new HashMap<>(data);
         Card[] entityRef = { entity };
 
-        entityRef[0] = pipeline(() -> {
+        entityRef[0] = executeSafely(() -> {
             // Extract offer and remove ID
             int offer = Integer.parseInt(fieldsToUpdate.getOrDefault("offer", -1).toString());
             fieldsToUpdate.remove("offer");
@@ -356,7 +352,7 @@ public class CardRepository implements RepositoryBase<Card> {
 
     @Override
     public void deleteById(String id) {
-        pipeline(() -> {
+        executeSafely(() -> {
             var conn = connection.getConnection();
             var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE id = ?", id);
 
@@ -376,7 +372,7 @@ public class CardRepository implements RepositoryBase<Card> {
     }
 
     public List<Card> findAllByUserId(String userId) {
-        return pipeline(() -> {
+        return executeSafely(() -> {
             var conn = connection.getConnection();
             var rs = executeQuery(conn, "SELECT * from " + TABLE_NAME + " WHERE user_id = ?", userId);
             List<Card> cards = new ArrayList<>();

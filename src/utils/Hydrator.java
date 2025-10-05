@@ -173,8 +173,7 @@ public class Hydrator {
         return obj;
     }
 
-    // Simplified toMap method
-    public static Map<String, Object> toMap(ResultSet rs) throws SQLException {
+    public static Map<String, Object> resultSetToMap(ResultSet rs) throws SQLException {
         Map<String, Object> result = new HashMap<>();
         ResultSetMetaData meta = rs.getMetaData();
         int columnCount = meta.getColumnCount();

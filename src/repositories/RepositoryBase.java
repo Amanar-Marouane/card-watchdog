@@ -2,18 +2,18 @@ package repositories;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.Statement;
 import java.util.Collections;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import utils.Callback;
 import utils.VoidCallback;
 
-public interface RepositoryBase<T> {
+public abstract class RepositoryBase {
 
-    default <R> R pipeline(Callback<R> c) {
+    protected <R> R executeSafely(Callback<R> c) {
         try {
             return c.run();
         } catch (Exception e) {
@@ -21,7 +21,7 @@ public interface RepositoryBase<T> {
         }
     }
 
-    default void pipeline(VoidCallback c) {
+    protected void executeSafely(VoidCallback c) {
         try {
             c.run();
         } catch (Exception e) {
@@ -29,21 +29,28 @@ public interface RepositoryBase<T> {
         }
     }
 
-    default String fieldsOf(Map<String, Object> data) {
-        return "(" + String.join(" ,", data.keySet()) + ")";
+    protected String fieldsOf(Map<String, Object> data) throws Exception {
+        if (data == null || data.isEmpty())
+            throw new Exception("No fields to continue");
+
+        return "(" + String.join(", ", data.keySet()) + ")";
     }
 
-    default String bindingTemplateOf(Map<String, Object> data) {
+    protected String bindingTemplateOf(Map<String, Object> data) throws Exception {
+        if (data == null || data.isEmpty())
+            throw new Exception("No fields to continue");
         return "(" + String.join(" ,", Collections.nCopies(data.size(), "?")) + ")";
     }
 
-    default String setClauseOf(Map<String, Object> data) {
+    protected String setClauseOf(Map<String, Object> data) throws Exception {
+        if (data == null || data.isEmpty())
+            throw new Exception("No fields to continue");
         return data.keySet().stream()
                 .map(field -> field + " = ?")
                 .collect(Collectors.joining(", "));
     }
 
-    default ResultSet executeQuery(Connection conn, String sql, Object... params) throws Exception {
+    protected ResultSet executeQuery(Connection conn, String sql, Object... params) throws Exception {
         var stmt = conn.prepareStatement(sql);
         for (int i = 0; i < params.length; i++) {
             stmt.setObject(i + 1, params[i]);
@@ -51,66 +58,26 @@ public interface RepositoryBase<T> {
         return stmt.executeQuery();
     }
 
-    default int executeUpdate(Connection conn, String sql, Object... params) throws Exception {
-        var stmt = conn.prepareStatement(sql);
-        for (int i = 0; i < params.length; i++) {
-            stmt.setObject(i + 1, params[i]);
+    protected int executeUpdate(Connection conn, String sql, Object... params) throws Exception {
+        try (var stmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            for (int i = 0; i < params.length; i++) {
+                stmt.setObject(i + 1, params[i]);
+            }
+
+            stmt.executeUpdate();
+
+            try (var rs = stmt.getGeneratedKeys()) {
+                if (rs.next())
+                    return rs.getInt(1); // return the generated ID
+            }
+            return -1; // no generated ID for update/delete
         }
-        return stmt.executeUpdate();
     }
 
-    /**
-     * Filter data to create or update certain entity
-     * 
-     * @param data
-     * @return
-     * @throws Exception
-     */
-    default Map<String, Object> filterToCOU(Map<String, Object> data) throws Exception {
-        if (data.containsKey("id"))
-            data.remove("id");
-
-        if (data.isEmpty())
-            throw new Exception("data is empty");
-
-        return data;
+    protected Map<String, Object> filterID(Map<String, Object> data) throws Exception {
+        Map<String, Object> mutableData = new HashMap<>(data);
+        if (mutableData.containsKey("id"))
+            mutableData.remove("id");
+        return mutableData;
     }
-
-    /**
-     * Retrieve all entities.
-     * 
-     * @return list of all entities
-     */
-    List<T> findAll();
-
-    /**
-     * Find an entity by a given key/value pair.
-     * 
-     * @param id the id to match
-     * @return an Optional containing the entity if found, empty otherwise
-     */
-    Optional<T> findById(String id);
-
-    /**
-     * Save or update an entity in the repository.
-     * 
-     * @param entity the entity to save
-     */
-    T create(Map<String, Object> data);
-
-    /**
-     * Update specific fields of an entity in the repository.
-     * 
-     * @param entity
-     * @param fieldsToUpdate
-     */
-    void update(T entity, Map<String, Object> fieldsToUpdate);
-
-    /**
-     * Delete an entity from the repository.
-     * 
-     * @param entity
-     */
-    void deleteById(String id);
-
 }

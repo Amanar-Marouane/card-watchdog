@@ -13,7 +13,6 @@ import entities.CardOperation;
 import entities.CreditCard;
 import entities.DebitCard;
 import entities.PrepaidCard;
-import enums.CardStatus;
 import enums.OperationType;
 import repositories.CardOperationRepository;
 import repositories.CardRepository;
@@ -22,10 +21,13 @@ import utils.Console;
 public class CardOperationService {
     private final CardOperationRepository cardOperationRepository;
     private final CardRepository cardRepository;
+    private final FraudDetectionService fraudDetectionService;
 
-    public CardOperationService(CardOperationRepository cardOperationRepository, CardRepository cardRepository) {
+    public CardOperationService(CardOperationRepository cardOperationRepository, CardRepository cardRepository,
+            FraudDetectionService fraudDetectionService) {
         this.cardOperationRepository = cardOperationRepository;
         this.cardRepository = cardRepository;
+        this.fraudDetectionService = fraudDetectionService;
     }
 
     /**
@@ -46,7 +48,7 @@ public class CardOperationService {
         }
 
         Card card = cardOpt.get();
-        if (!CardStatus.ACTIVE.name().equals(card.getStatus())) {
+        if (!fraudDetectionService.canProcessOperation(card)) {
             throw new Exception("Card is not active");
         }
 
@@ -65,7 +67,22 @@ public class CardOperationService {
         operationData.put("location", location);
         operationData.put("card_id", card.getId());
 
-        // Create in database and return the created operation
+        // Create a temporary operation object for fraud detection (without saving to
+        // DB)
+        CardOperation tempOperation = new CardOperation(
+                operationId.toString(),
+                now,
+                amount,
+                operationType.name(),
+                location,
+                Integer.parseInt(cardId));
+
+        // Check for potential fraud BEFORE creating the operation
+        if (fraudDetectionService.checkForFraud(card, tempOperation)) {
+            throw new Exception("Transaction declined: Suspicious activity detected");
+        }
+
+        // Create in database and return the created operation only if no fraud detected
         try {
             return cardOperationRepository.create(operationData);
         } catch (Exception e) {

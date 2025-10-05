@@ -68,7 +68,7 @@ CREATE TABLE card_operations (
 
 -- Fraud alerts table
 CREATE TABLE fraud_alerts (
-    id CHAR(36) PRIMARY KEY, -- UUID
+    id INT AUTO_INCREMENT PRIMARY KEY,
     description TEXT NOT NULL,
     level ENUM('INFO', 'AVERTISSEMENT', 'CRITIQUE') NOT NULL,
     card_id INT NOT NULL,

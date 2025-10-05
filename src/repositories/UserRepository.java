@@ -9,21 +9,21 @@ import entities.User;
 import services.DBConnection;
 import utils.Hydrator;
 
-public class UserRepository implements RepositoryBase<User> {
+public class UserRepository extends RepositoryBase implements RepositoryContract<User> {
     public static final String TABLE_NAME = "users";
-    private final DBConnection connectionService;
+    private final DBConnection connection;
 
-    public UserRepository(DBConnection connectionService) {
-        this.connectionService = connectionService;
+    public UserRepository(DBConnection connection) {
+        this.connection = connection;
     }
 
     @Override
     public Optional<User> findById(String id) {
-        return pipeline(() -> {
-            var conn = connectionService.getConnection();
+        return executeSafely(() -> {
+            var conn = connection.getConnection();
             var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE id = ? LIMIT 1", id);
             if (rs.next()) {
-                return Optional.ofNullable(Hydrator.mapRow(Hydrator.toMap(rs), User.class));
+                return Optional.ofNullable(Hydrator.mapRow(Hydrator.resultSetToMap(rs), User.class));
             }
             return Optional.empty();
         });
@@ -31,12 +31,12 @@ public class UserRepository implements RepositoryBase<User> {
 
     @Override
     public List<User> findAll() {
-        return pipeline(() -> {
-            var conn = connectionService.getConnection();
+        return executeSafely(() -> {
+            var conn = connection.getConnection();
             var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME);
             List<User> users = new ArrayList<>();
             while (rs.next()) {
-                users.add(Hydrator.mapRow(Hydrator.toMap(rs), User.class));
+                users.add(Hydrator.mapRow(Hydrator.resultSetToMap(rs), User.class));
             }
             return users;
         });
@@ -44,10 +44,10 @@ public class UserRepository implements RepositoryBase<User> {
 
     @Override
     public User create(Map<String, Object> data) {
-        return pipeline(() -> {
+        return executeSafely(() -> {
             // Exclude ID if present
-            Map<String, Object> filteredData = filterToCOU(data);
-            var conn = connectionService.getConnection();
+            Map<String, Object> filteredData = filterID(data);
+            var conn = connection.getConnection();
 
             var stmt = conn.prepareStatement(
                     "INSERT INTO " + TABLE_NAME + " " + fieldsOf(filteredData) + " VALUES "
@@ -77,8 +77,8 @@ public class UserRepository implements RepositoryBase<User> {
 
     @Override
     public void deleteById(String id) {
-        pipeline(() -> {
-            var conn = connectionService.getConnection();
+        executeSafely(() -> {
+            var conn = connection.getConnection();
             executeUpdate(conn, "DELETE FROM " + TABLE_NAME + " WHERE id = ?", id);
         });
     }
@@ -87,9 +87,9 @@ public class UserRepository implements RepositoryBase<User> {
     public void update(User user, Map<String, Object> fieldsToUpdate) {
         final User[] userRef = { user };
 
-        userRef[0] = pipeline(() -> {
-            Map<String, Object> filteredData = filterToCOU(fieldsToUpdate);
-            var conn = connectionService.getConnection();
+        userRef[0] = executeSafely(() -> {
+            Map<String, Object> filteredData = filterID(fieldsToUpdate);
+            var conn = connection.getConnection();
 
             var stmt = conn.prepareStatement(
                     "UPDATE " + TABLE_NAME + " SET " + setClauseOf(filteredData) + " WHERE id = ?");
@@ -109,11 +109,11 @@ public class UserRepository implements RepositoryBase<User> {
     }
 
     public Optional<User> findByEmail(String email) {
-        return pipeline(() -> {
-            var conn = connectionService.getConnection();
+        return executeSafely(() -> {
+            var conn = connection.getConnection();
             var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE email = ? LIMIT 1", email);
             if (rs.next()) {
-                return Optional.of(Hydrator.mapRow(Hydrator.toMap(rs), User.class));
+                return Optional.of(Hydrator.mapRow(Hydrator.resultSetToMap(rs), User.class));
             }
             return Optional.empty();
         });

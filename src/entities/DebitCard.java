@@ -8,9 +8,9 @@ import enums.CardType;
 final public class DebitCard extends Card {
     public static final String TABLE_NAME = "debit_cards";
     private double dailyLimit;
-    public static Map<String, Object> OFFER1 = Map.of("daily_limit", 500.0);
-    public static Map<String, Object> OFFER2 = Map.of("daily_limit", 1000.0);
-    public static Map<String, Object> OFFER3 = Map.of("daily_limit", 2000.0);
+    public static Map<String, Object> OFFER1 = Map.of("daily_limit", 1000.0);
+    public static Map<String, Object> OFFER2 = Map.of("daily_limit", 5000.0);
+    public static Map<String, Object> OFFER3 = Map.of("daily_limit", 12000.0);
 
     public DebitCard(int id, String expirationDate, String status, int userId, double dailyLimit) {
         super(id, expirationDate, status, CardType.DEBIT.name(), userId);

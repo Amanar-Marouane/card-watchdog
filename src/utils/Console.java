@@ -66,4 +66,9 @@ public class Console {
             }
         }
     }
+
+    // Added for more readable output in fraud detection system
+    public static void alert(String msg) {
+        System.out.println(RED + "[ALERT] " + msg + RESET);
+    }
 }

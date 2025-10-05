@@ -9,9 +9,9 @@ final public class CreditCard extends Card {
     public static final String TABLE_NAME = "credit_cards";
     private double monthlyLimit;
     private double interestRate;
-    public static Map<String, Object> OFFER1 = Map.of("monthly_limit", 2000.0, "interest_rate", 2.5);
-    public static Map<String, Object> OFFER2 = Map.of("monthly_limit", 5000.0, "interest_rate", 3.5);
-    public static Map<String, Object> OFFER3 = Map.of("monthly_limit", 10000.0, "interest_rate", 5.0);
+    public static Map<String, Object> OFFER1 = Map.of("monthly_limit", 12000.0, "interest_rate", 2.5);
+    public static Map<String, Object> OFFER2 = Map.of("monthly_limit", 50000.0, "interest_rate", 3.5);
+    public static Map<String, Object> OFFER3 = Map.of("monthly_limit", 100000.0, "interest_rate", 5.0);
 
     public CreditCard(int id, String expirationDate, String status, int userId, double monthlyLimit,
             double interestRate) {

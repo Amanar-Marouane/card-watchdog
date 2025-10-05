@@ -3,11 +3,13 @@ package www;
 import config.ConfigLoader;
 import repositories.CardOperationRepository;
 import repositories.CardRepository;
+import repositories.FraudAlertRepository;
 import repositories.UserRepository;
 import services.AuthService;
 import services.CardOperationService;
 import services.CardService;
 import services.DBConnection;
+import services.FraudDetectionService;
 import ui.ConsoleUi;
 
 public class Main {
@@ -18,6 +20,8 @@ public class Main {
     private static UserRepository userRepository;
     private static CardRepository cardRepository;
     private static CardOperationRepository cardOperationRepository;
+    private static FraudAlertRepository fraudAlertRepository;
+    private static FraudDetectionService fraudDetectionService;
 
     public static void main(String[] args) {
         // Load configuration
@@ -59,9 +63,12 @@ public class Main {
         userRepository = new UserRepository(connection);
         cardRepository = new CardRepository(connection);
         cardOperationRepository = new CardOperationRepository(connection);
+        fraudAlertRepository = new FraudAlertRepository(connection);
 
         authService = new AuthService(userRepository);
         cardService = new CardService(cardRepository);
-        cardOperationService = new CardOperationService(cardOperationRepository, cardRepository);
+        fraudDetectionService = new FraudDetectionService(fraudAlertRepository, cardRepository,
+                cardOperationRepository);
+        cardOperationService = new CardOperationService(cardOperationRepository, cardRepository, fraudDetectionService);
     }
 }
