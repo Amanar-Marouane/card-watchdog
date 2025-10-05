@@ -1,8 +1,10 @@
 package repositories;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import utils.Callback;
 import utils.VoidCallback;
@@ -23,6 +25,37 @@ public interface RepositoryBase<T> {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    default String fieldsOf(Map<String, Object> data) {
+        return "(" + String.join(" ,", data.keySet()) + ")";
+    }
+
+    default String bindingTemplateOf(Map<String, Object> data) {
+        return "(" + String.join(" ,", Collections.nCopies(data.size(), "?")) + ")";
+    }
+
+    default String setClauseOf(Map<String, Object> data) {
+        return data.keySet().stream()
+                .map(field -> field + " = ?")
+                .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * Filter data to create or update certain entity
+     * 
+     * @param data
+     * @return
+     * @throws Exception
+     */
+    default Map<String, Object> filterToCOU(Map<String, Object> data) throws Exception {
+        if (data.containsKey("id"))
+            data.remove("id");
+
+        if (data.isEmpty())
+            throw new Exception("data is empty");
+
+        return data;
     }
 
     /**
@@ -53,7 +86,7 @@ public interface RepositoryBase<T> {
      * @param entity
      * @param fieldsToUpdate
      */
-    void updateById(T entity, Map<String, Object> fieldsToUpdate);
+    void update(T entity, Map<String, Object> fieldsToUpdate);
 
     /**
      * Delete an entity from the repository.

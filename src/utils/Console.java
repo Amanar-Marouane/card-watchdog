@@ -30,7 +30,7 @@ public class Console {
         System.out.println(GREEN + msg + RESET);
     }
 
-    public static void warning(String msg) {
+    public static void warn(String msg) {
         System.out.println(YELLOW + "[WARNING] " + msg + RESET);
     }
 
@@ -62,7 +62,7 @@ public class Console {
             } else if (response.equals("no") || response.equals("n") || response.isEmpty()) {
                 return false;
             } else {
-                warning("Please answer with 'y/yes' or 'n/no'");
+                warn("Please answer with 'y/yes' or 'n/no'");
             }
         }
     }

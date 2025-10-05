@@ -1,9 +1,11 @@
 package www;
 
 import config.ConfigLoader;
+import repositories.CardOperationRepository;
 import repositories.CardRepository;
 import repositories.UserRepository;
 import services.AuthService;
+import services.CardOperationService;
 import services.CardService;
 import services.DBConnection;
 import ui.ConsoleUi;
@@ -12,8 +14,10 @@ public class Main {
     private static DBConnection connection;
     private static AuthService authService;
     private static CardService cardService;
+    private static CardOperationService cardOperationService;
     private static UserRepository userRepository;
     private static CardRepository cardRepository;
+    private static CardOperationRepository cardOperationRepository;
 
     public static void main(String[] args) {
         // Load configuration
@@ -26,7 +30,7 @@ public class Main {
         reposInit();
 
         // Start the application
-        ConsoleUi menu = new ConsoleUi(authService, cardService);
+        ConsoleUi menu = new ConsoleUi(authService, cardService, cardOperationService);
         menu.run();
 
         // Exit the application
@@ -54,7 +58,10 @@ public class Main {
     private static void reposInit() {
         userRepository = new UserRepository(connection);
         cardRepository = new CardRepository(connection);
+        cardOperationRepository = new CardOperationRepository(connection);
+
         authService = new AuthService(userRepository);
         cardService = new CardService(cardRepository);
+        cardOperationService = new CardOperationService(cardOperationRepository, cardRepository);
     }
 }

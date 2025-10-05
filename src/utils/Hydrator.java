@@ -2,12 +2,18 @@ package utils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.RecordComponent;
+import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -87,9 +93,135 @@ public class Hydrator {
         }
     }
 
+    /**
+     * Cast a value to the target type, handling common Java types
+     * 
+     * @param value      The value to cast
+     * @param targetType The target type class
+     * @return The cast value
+     */
+    @SuppressWarnings("all")
+    public static Object castValueToType(Object value, Class<?> targetType) {
+        if (value == null) {
+            return null;
+        }
+
+        // Handle primitive types and their wrappers
+        if (targetType == int.class || targetType == Integer.class) {
+            if (value instanceof Number) {
+                return ((Number) value).intValue();
+            } else {
+                return Integer.parseInt(value.toString());
+            }
+        } else if (targetType == long.class || targetType == Long.class) {
+            if (value instanceof Number) {
+                return ((Number) value).longValue();
+            } else {
+                return Long.parseLong(value.toString());
+            }
+        } else if (targetType == double.class || targetType == Double.class) {
+            if (value instanceof Number) {
+                return ((Number) value).doubleValue();
+            } else {
+                return Double.parseDouble(value.toString());
+            }
+        } else if (targetType == float.class || targetType == Float.class) {
+            if (value instanceof Number) {
+                return ((Number) value).floatValue();
+            } else {
+                return Float.parseFloat(value.toString());
+            }
+        } else if (targetType == short.class || targetType == Short.class) {
+            if (value instanceof Number) {
+                return ((Number) value).shortValue();
+            } else {
+                return Short.parseShort(value.toString());
+            }
+        } else if (targetType == byte.class || targetType == Byte.class) {
+            if (value instanceof Number) {
+                return ((Number) value).byteValue();
+            } else {
+                return Byte.parseByte(value.toString());
+            }
+        } else if (targetType == boolean.class || targetType == Boolean.class) {
+            if (value instanceof Boolean) {
+                return value;
+            } else {
+                return Boolean.parseBoolean(value.toString());
+            }
+        } else if (targetType == char.class || targetType == Character.class) {
+            if (value instanceof Character) {
+                return value;
+            } else {
+                String str = value.toString();
+                return str.isEmpty() ? '\0' : str.charAt(0);
+            }
+        }
+        // Handle String type
+        else if (targetType == String.class) {
+            return value.toString();
+        }
+        // Handle UUID type
+        else if (targetType == UUID.class) {
+            if (value instanceof UUID) {
+                return value;
+            } else {
+                return UUID.fromString(value.toString());
+            }
+        }
+        // Handle date/time types
+        else if (targetType == LocalDateTime.class) {
+            if (value instanceof LocalDateTime) {
+                return value;
+            } else if (value instanceof java.sql.Timestamp) {
+                return ((java.sql.Timestamp) value).toLocalDateTime();
+            } else if (value instanceof Date) {
+                return ((Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
+            }
+        } else if (targetType == LocalDate.class) {
+            if (value instanceof LocalDate) {
+                return value;
+            } else if (value instanceof java.sql.Date) {
+                return ((java.sql.Date) value).toLocalDate();
+            } else if (value instanceof Date) {
+                return ((Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+            }
+        } else if (targetType == LocalTime.class) {
+            if (value instanceof LocalTime) {
+                return value;
+            } else if (value instanceof java.sql.Time) {
+                return ((java.sql.Time) value).toLocalTime();
+            }
+        }
+        // Handle BigDecimal
+        else if (targetType == BigDecimal.class) {
+            if (value instanceof BigDecimal) {
+                return value;
+            } else if (value instanceof Number) {
+                return new BigDecimal(value.toString());
+            } else {
+                return new BigDecimal(value.toString());
+            }
+        }
+        // Handle enums
+        else if (targetType.isEnum()) {
+            return Enum.valueOf((Class<Enum>) targetType, value.toString());
+        }
+
+        // Default case: return the value if it's already assignable to the target type
+        if (targetType.isAssignableFrom(value.getClass())) {
+            return value;
+        }
+
+        // If we can't cast, return the original value
+        Console.warn("Could not cast value of type " + value.getClass() + " to " + targetType);
+        return value;
+    }
+
     public static <T> T mapRow(ResultSet rs, Class<T> clazz) throws Exception {
         ResultSetMetaData meta = rs.getMetaData();
 
+        // Handle records
         if (clazz.isRecord()) {
             var recordComponents = clazz.getRecordComponents();
             var constructor = clazz.getDeclaredConstructor(
@@ -100,29 +232,35 @@ public class Hydrator {
             Object[] args = Arrays.stream(recordComponents)
                     .map(c -> {
                         try {
-                            // Try with direct name match first
+                            Class<?> fieldType = c.getType();
+                            Object value;
+
+                            // Try direct column
                             try {
-                                return rs.getObject(c.getName());
+                                value = rs.getObject(c.getName());
                             } catch (SQLException e) {
-                                // Try with snake_case conversion
+                                // Fallback to snake_case
                                 String snakeCase = CaseConverter.camelToSnake(c.getName());
-                                return rs.getObject(snakeCase);
+                                value = rs.getObject(snakeCase);
                             }
+
+                            // Cast to the correct type
+                            return castValueToType(value, fieldType);
                         } catch (SQLException e) {
                             throw new RuntimeException(e);
                         }
-                    }).toArray();
+                    })
+                    .toArray();
 
-            T obj = (T) constructor.newInstance(args);
-            return obj;
+            return (T) constructor.newInstance(args);
         }
 
         // Special handling for Card subclasses
         if (Card.class.isAssignableFrom(clazz)) {
-            return createCardInstance(rs, clazz);
+            return createCardInstance(toMap(rs), clazz);
         }
 
-        // Default approach for other classes
+        // Default class handling
         T obj = clazz.getDeclaredConstructor().newInstance();
         int columnCount = meta.getColumnCount();
 
@@ -130,20 +268,21 @@ public class Hydrator {
             String columnName = meta.getColumnLabel(i);
             Object value = rs.getObject(i);
 
-            // Find matching field using case converter
+            // Find matching field
             String fieldName = CaseConverter.findMatchingFieldName(columnName, clazz);
             if (fieldName != null) {
                 try {
                     Field field = findField(clazz, fieldName);
                     if (field != null) {
                         field.setAccessible(true);
-                        field.set(obj, value);
+                        field.set(obj, castValueToType(value, field.getType()));
                     }
                 } catch (NoSuchFieldException ignored) {
-                    // Field already checked by findMatchingFieldName, so this shouldn't happen
+                    // already checked by findMatchingFieldName
                 }
             }
         }
+
         return obj;
     }
 
@@ -166,7 +305,10 @@ public class Hydrator {
                             .toArray(Class[]::new));
 
             Object[] args = Arrays.stream(recordComponents)
-                    .map(c -> convertedData.get(c.getName()))
+                    .map(c -> {
+                        Object value = convertedData.get(c.getName());
+                        return castValueToType(value, c.getType());
+                    })
                     .toArray();
 
             return (T) constructor.newInstance(args);
@@ -185,20 +327,20 @@ public class Hydrator {
             Object value = entry.getValue();
 
             try {
-                // Try to find the field with current name
                 Field field = findField(clazz, fieldName);
                 if (field != null) {
                     field.setAccessible(true);
-                    field.set(obj, value);
+                    field.set(obj, castValueToType(value, field.getType()));
                 }
             } catch (NoSuchFieldException ignored) {
-                // Field not in class, skip
+                // skip
             }
         }
 
         return obj;
     }
 
+    // Simplified toMap method
     public static Map<String, Object> toMap(ResultSet rs) throws SQLException {
         Map<String, Object> result = new HashMap<>();
         ResultSetMetaData meta = rs.getMetaData();
@@ -207,9 +349,9 @@ public class Hydrator {
         for (int i = 1; i <= columnCount; i++) {
             String columnName = meta.getColumnLabel(i);
             Object value = rs.getObject(i);
-            result.put(columnName, value);
 
-            // Also add camelCase version for Java compatibility
+            // Add both the original column name and camelCase version
+            result.put(columnName, value);
             result.put(CaseConverter.snakeToCamel(columnName), value);
         }
 
@@ -231,105 +373,6 @@ public class Hydrator {
             }
             throw e;
         }
-    }
-
-    // Create Card instances based on type
-    @SuppressWarnings("unchecked")
-    private static <T> T createCardInstance(ResultSet rs, Class<T> clazz) throws Exception {
-        // Try different column name patterns to handle both direct columns and aliases
-        int id;
-        try {
-            id = rs.getInt("id");
-        } catch (SQLException e) {
-            try {
-                // Try using the table-prefixed column name
-                id = rs.getInt("cards.id");
-            } catch (SQLException e2) {
-                // If both fail, use card_id as a fallback
-                id = rs.getInt("card_id");
-            }
-        }
-
-        String expirationDate = getStringFromResult(rs, "expiration_date", "cards.expiration_date");
-        String status = getStringFromResult(rs, "status", "cards.status");
-        int userId = getIntFromResult(rs, "user_id", "cards.user_id");
-
-        if (clazz == CreditCard.class) {
-            // Try both old and new column names for compatibility
-            double monthlyLimit;
-            double interestRate;
-            try {
-                monthlyLimit = rs.getDouble("monthly_limit");
-            } catch (SQLException e) {
-                monthlyLimit = rs.getDouble("plafond_mensuel");
-            }
-
-            try {
-                interestRate = rs.getDouble("interest_rate");
-            } catch (SQLException e) {
-                interestRate = rs.getDouble("taux_interet");
-            }
-
-            return (T) new CreditCard(id, expirationDate, status, userId, monthlyLimit, interestRate);
-        } else if (clazz == DebitCard.class) {
-            double dailyLimit;
-            try {
-                dailyLimit = rs.getDouble("daily_limit");
-            } catch (SQLException e) {
-                dailyLimit = rs.getDouble("plafond_journalier");
-            }
-
-            return (T) new DebitCard(id, expirationDate, status, userId, dailyLimit);
-        } else if (clazz == PrepaidCard.class) {
-            double availableBalance;
-            try {
-                availableBalance = rs.getDouble("available_balance");
-            } catch (SQLException e) {
-                availableBalance = rs.getDouble("solde_disponible");
-            }
-
-            return (T) new PrepaidCard(id, expirationDate, status, userId, availableBalance);
-        }
-
-        throw new IllegalArgumentException("Unsupported card type: " + clazz.getName());
-    }
-
-    /**
-     * Get string from ResultSet trying multiple column names in order
-     * 
-     * @param rs
-     * @param columnNames
-     * @return
-     * @throws SQLException
-     */
-    private static String getStringFromResult(ResultSet rs, String... columnNames) throws SQLException {
-        for (String columnName : columnNames) {
-            try {
-                return rs.getString(columnName);
-            } catch (SQLException e) {
-                // Try next column name
-            }
-        }
-        throw new SQLException("None of the specified column names exist: " + String.join(", ", columnNames));
-    }
-
-    /**
-     * Get int from ResultSet trying multiple column names in order
-     * 
-     * @param rs
-     * @param columnNames
-     * @return
-     * @throws SQLException
-     */
-    private static int getIntFromResult(ResultSet rs, String... columnNames) throws SQLException {
-        for (String columnName : columnNames) {
-            try {
-                return rs.getInt(columnName);
-            } catch (SQLException e) {
-                // Try next column name
-            }
-        }
-        throw new SQLException("None of the specified column names exist: " + String.join(", ", columnNames));
     }
 
     @SuppressWarnings("unchecked")

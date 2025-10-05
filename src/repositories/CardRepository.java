@@ -3,13 +3,13 @@ package repositories;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 import entities.Card;
 import entities.CreditCard;
@@ -32,22 +32,10 @@ public class CardRepository implements RepositoryBase<Card> {
     public Optional<Card> findById(String id) {
         return pipeline(() -> {
             var conn = connection.getConnection();
-            var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME + " WHERE id = ? LIMIT 1");
-            stmt.setString(1, id);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE id = ? LIMIT 1", id);
+
             if (rs.next()) {
-                // it throws use .toUpperCase()
-                CardType ct = CardType.valueOf(rs.getString("card_type"));
-                switch (ct) {
-                    case PREPAID:
-                        return Optional.of(this.fetchSupType(conn, id, PrepaidCard.class, PrepaidCard.TABLE_NAME, rs));
-                    case DEBIT:
-                        return Optional.of(this.fetchSupType(conn, id, DebitCard.class, DebitCard.TABLE_NAME, rs));
-                    case CREDIT:
-                        return Optional.of(this.fetchSupType(conn, id, CreditCard.class, CreditCard.TABLE_NAME, rs));
-                    default:
-                        throw new NoSuchElementException("no such type");
-                }
+                return Optional.of(createCardFromResultSet(conn, rs));
             }
             return Optional.empty();
         });
@@ -57,37 +45,38 @@ public class CardRepository implements RepositoryBase<Card> {
     public List<Card> findAll() {
         return pipeline(() -> {
             var conn = connection.getConnection();
-            var stmt = conn.prepareStatement("SELECT * from " + TABLE_NAME);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * from " + TABLE_NAME);
             List<Card> cards = new ArrayList<>();
+
             while (rs.next()) {
-                // it throws use .toUpperCase()
-                CardType ct = CardType.valueOf(rs.getString("card_type"));
-                String id = rs.getString("id");
-                switch (ct) {
-                    case PREPAID:
-                        cards.add(this.fetchSupType(conn, id, PrepaidCard.class, PrepaidCard.TABLE_NAME, rs));
-                        break;
-                    case DEBIT:
-                        cards.add(this.fetchSupType(conn, id, DebitCard.class, DebitCard.TABLE_NAME, rs));
-                        break;
-                    case CREDIT:
-                        cards.add(this.fetchSupType(conn, id, CreditCard.class, CreditCard.TABLE_NAME, rs));
-                        break;
-                    default:
-                        throw new NoSuchElementException("no such type");
-                }
+                cards.add(createCardFromResultSet(conn, rs));
             }
             return cards;
         });
     }
 
+    /**
+     * Creates a card entity from a result set based on its type
+     */
+    private Card createCardFromResultSet(Connection conn, ResultSet rs) throws Exception {
+        CardType ct = CardType.valueOf(rs.getString("card_type"));
+        String id = rs.getString("id");
+
+        return switch (ct) {
+            case PREPAID -> fetchSupType(conn, id, PrepaidCard.class, PrepaidCard.TABLE_NAME, rs);
+            case DEBIT -> fetchSupType(conn, id, DebitCard.class, DebitCard.TABLE_NAME, rs);
+            case CREDIT -> fetchSupType(conn, id, CreditCard.class, CreditCard.TABLE_NAME, rs);
+        };
+    }
+
+    /**
+     * Fetches the subtype-specific data and creates the appropriate card entity
+     */
     private <T extends Card> T fetchSupType(Connection conn, String id, Class<T> clazz, String table, ResultSet baseRow)
-            throws NoSuchElementException {
+            throws Exception {
         return pipeline(() -> {
-            var stmt = conn.prepareStatement("SELECT * FROM " + table + " WHERE card_id = ?");
-            stmt.setString(1, id);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * FROM " + table + " WHERE card_id = ?", id);
+
             if (rs.next()) {
                 Map<String, Object> baseMap = Hydrator.toMap(baseRow);
                 Map<String, Object> subMap = Hydrator.toMap(rs);
@@ -99,234 +88,311 @@ public class CardRepository implements RepositoryBase<Card> {
         });
     }
 
+    /**
+     * Helper method to execute a query with parameters
+     */
+    private ResultSet executeQuery(Connection conn, String sql, Object... params) throws Exception {
+        var stmt = conn.prepareStatement(sql);
+        for (int i = 0; i < params.length; i++) {
+            stmt.setObject(i + 1, params[i]);
+        }
+        return stmt.executeQuery();
+    }
+
     @Override
     public Card create(Map<String, Object> data) {
         return pipeline(() -> {
-            // Exclude ID if present
-            Map<String, Object> filteredData = data.entrySet().stream()
-                    .filter(e -> !"id".equals(e.getKey()))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            Map<String, Object> filteredData = filterToCOU(new HashMap<>(data));
 
             if (!filteredData.containsKey("card_type"))
                 throw new Exception("No card type provided");
 
-            if (filteredData.isEmpty())
-                throw new Exception("No data provided");
-
-            Map<String, Object> offer = this.getOffer(new HashMap<>(filteredData));
+            Map<String, Object> offer = getOffer(new HashMap<>(filteredData));
             filteredData.remove("offer");
-            var conn = connection.getConnection();
 
-            String fields = "(" + String.join(", ", filteredData.keySet()) + ")";
-            String bindingTemplate = "(" + String.join(", ", Collections.nCopies(filteredData.size(), "?")) + ")";
+            // Insert base card record and get ID
+            int cardId = insertBaseCard(filteredData);
 
-            var stmt = conn.prepareStatement("INSERT INTO " + TABLE_NAME + " " + fields + " VALUES " + bindingTemplate,
-                    java.sql.Statement.RETURN_GENERATED_KEYS);
-
-            int index = 1;
-            for (Object value : filteredData.values()) {
-                stmt.setObject(index++, value);
-            }
-
-            int affectedRows = stmt.executeUpdate();
-            if (affectedRows == 0)
-                throw new Exception("Creating user failed, no rows affected.");
-
-            try (var generatedKeys = stmt.getGeneratedKeys()) {
-                if (generatedKeys.next()) {
-                    int id = generatedKeys.getInt(1);
-                    return this.setAndGetSubTypeCard(id, new HashMap<>(offer), new HashMap<>(data));
-                } else
-                    throw new Exception("Creating user failed, no ID obtained.");
-            }
+            // Insert subtype data and get complete card object
+            return insertSubTypeCard(cardId, offer, data);
         });
     }
 
-    private Map<String, Object> getOffer(Map<String, Object> data) throws Exception, NoSuchElementException {
-        CardType ct = CardType.valueOf(data.get("card_type").toString());
+    /**
+     * Insert the base card record and return the generated ID
+     */
+    private int insertBaseCard(Map<String, Object> cardData) throws Exception {
+        var conn = connection.getConnection();
+        String fields = fieldsOf(cardData);
+        String bindingTemplate = bindingTemplateOf(cardData);
 
-        int offerId = (int) data.get("offer");
+        var stmt = conn.prepareStatement(
+                "INSERT INTO " + TABLE_NAME + " " + fields + " VALUES " + bindingTemplate,
+                java.sql.Statement.RETURN_GENERATED_KEYS);
 
-        switch (ct) {
-            case PREPAID:
-                return PrepaidCard.getOffer(offerId);
-            case CREDIT:
-                return CreditCard.getOffer(offerId);
-            case DEBIT:
-                return DebitCard.getOffer(offerId);
-            default:
-                throw new NoSuchElementException("No such type");
+        int index = 1;
+        for (Object value : cardData.values()) {
+            stmt.setObject(index++, value);
+        }
+
+        int affectedRows = stmt.executeUpdate();
+        if (affectedRows == 0)
+            throw new Exception("Creating card failed, no rows affected.");
+
+        try (var generatedKeys = stmt.getGeneratedKeys()) {
+            if (generatedKeys.next()) {
+                return generatedKeys.getInt(1);
+            } else
+                throw new Exception("Creating card failed, no ID obtained.");
         }
     }
 
-    private Card setAndGetSubTypeCard(int cardId, Map<String, Object> rawOfferData,
-            Map<String, Object> rawCardData)
-            throws NoSuchElementException {
-        return pipeline(() -> {
-            rawOfferData.put("card_id", cardId);
-            CardType ct = CardType.valueOf(rawCardData.get("card_type").toString());
-            var conn = connection.getConnection();
+    /**
+     * Insert subtype card data and return the complete card
+     */
+    private Card insertSubTypeCard(int cardId, Map<String, Object> offerData, Map<String, Object> cardData)
+            throws Exception {
+        offerData.put("card_id", cardId);
+        CardType ct = CardType.valueOf(cardData.get("card_type").toString());
+        var conn = connection.getConnection();
 
-            String[] columns = rawOfferData.keySet().toArray(new String[0]);
-            String fields = "(" + String.join(", ", columns) + ")";
-            Console.info("Feilds" + fields);
-            Console.info("Table => " + getTableNameByType(ct));
-            String bindingTemplate = "("
-                    + String.join(", ", Collections.nCopies(columns.length, "?")) + ")";
-            Console.info("bindingTemplate" + bindingTemplate);
+        String fields = fieldsOf(offerData);
+        String bindingTemplate = bindingTemplateOf(offerData);
+        String tableName = getTableNameByType(ct);
 
-            var stmt = conn.prepareStatement("INSERT INTO " + getTableNameByType(ct) + " " + fields
-                    + " VALUES " + bindingTemplate);
+        Console.info("Fields: " + fields);
+        Console.info("Table: " + tableName);
+        Console.info("Binding template: " + bindingTemplate);
 
-            int index = 1;
-            for (Object col : columns) {
-                stmt.setObject(index++, rawOfferData.get(col));
-            }
+        var stmt = conn.prepareStatement("INSERT INTO " + tableName + " " + fields + " VALUES " + bindingTemplate);
 
-            stmt.executeUpdate();
+        int index = 1;
+        for (Object value : offerData.values()) {
+            stmt.setObject(index++, value);
+        }
 
-            Map<String, Object> mergedData = new HashMap<>(rawCardData);
-            mergedData.putAll(rawOfferData);
-            switch (ct) {
-                case PREPAID:
-                    return Hydrator.mapRow(mergedData, PrepaidCard.class);
-                case DEBIT:
-                    return Hydrator.mapRow(mergedData, DebitCard.class);
-                case CREDIT:
-                    return Hydrator.mapRow(mergedData, CreditCard.class);
-                default:
-                    throw new NoSuchElementException("No such a card type");
-            }
-        });
+        stmt.executeUpdate();
+
+        // Combine data for hydration
+        Map<String, Object> mergedData = new HashMap<>(cardData);
+        mergedData.putAll(offerData);
+        mergedData.put("id", cardId);
+
+        return createCardInstance(ct, mergedData);
+    }
+
+    /**
+     * Create a card instance of the appropriate type
+     */
+    private Card createCardInstance(CardType cardType, Map<String, Object> data) throws Exception {
+        return switch (cardType) {
+            case PREPAID -> Hydrator.mapRow(data, PrepaidCard.class);
+            case DEBIT -> Hydrator.mapRow(data, DebitCard.class);
+            case CREDIT -> Hydrator.mapRow(data, CreditCard.class);
+        };
+    }
+
+    private Map<String, Object> getOffer(Map<String, Object> data) throws Exception {
+        CardType ct = CardType.valueOf(data.get("card_type").toString());
+        int offerId = (int) data.get("offer");
+
+        return switch (ct) {
+            case PREPAID -> PrepaidCard.getOffer(offerId);
+            case CREDIT -> CreditCard.getOffer(offerId);
+            case DEBIT -> DebitCard.getOffer(offerId);
+        };
     }
 
     private String getTableNameByType(CardType ct) {
-        switch (ct) {
-            case PREPAID:
-                return PrepaidCard.TABLE_NAME;
-            case DEBIT:
-                return DebitCard.TABLE_NAME;
-            case CREDIT:
-                return CreditCard.TABLE_NAME;
-            default:
-                throw new NoSuchElementException("No such a card type");
-        }
+        return switch (ct) {
+            case PREPAID -> PrepaidCard.TABLE_NAME;
+            case DEBIT -> DebitCard.TABLE_NAME;
+            case CREDIT -> CreditCard.TABLE_NAME;
+        };
     }
 
-    public void updateById(Card entity, Map<String, Object> fieldsToUpdate) {
-        if (fieldsToUpdate.containsKey("id"))
-            fieldsToUpdate.remove("id"); // prevent ID modification
-
+    @Override
+    public void update(Card entity, Map<String, Object> fieldsToUpdate) {
         if (fieldsToUpdate.isEmpty())
             return;
 
         Card[] entityRef = { entity };
 
         entityRef[0] = pipeline(() -> {
-
+            // Extract offer and remove ID
             int offer = Integer.parseInt(fieldsToUpdate.getOrDefault("offer", -1).toString());
             fieldsToUpdate.remove("offer");
+            fieldsToUpdate.remove("id");
+
+            // Split fields between base and subtype tables
+            CardType cardType = entity.getCardTypeEnum();
+            var fieldMaps = separateFields(cardType, fieldsToUpdate);
+            Map<String, Object> baseCardFields = fieldMaps.get("base");
+            Map<String, Object> subtypeFields = fieldMaps.get("subtype");
 
             var conn = connection.getConnection();
 
-            // Build SET clause
-            var setClause = fieldsToUpdate.keySet().stream()
-                    .map(field -> field + " = ?")
-                    .collect(Collectors.joining(", "));
+            // Update base card fields if any
+            updateBaseCardFields(conn, entity.getId(), baseCardFields);
 
-            var stmt = conn.prepareStatement(
-                    "UPDATE " + TABLE_NAME + " SET " + setClause + " WHERE id = ?");
+            // Update subtype-specific fields if any
+            updateSubtypeFields(conn, entity.getId(), cardType, subtypeFields);
 
-            int index = 1;
-            for (Object value : fieldsToUpdate.values()) {
-                stmt.setObject(index++, value);
-            }
-            stmt.setObject(index, entity.getId());
-            stmt.executeUpdate();
-
+            // Handle special offer update if needed
             if (offer != -1) {
-                Map<String, Object> offerData = this
-                        .getOffer(Map.of("card_type", entity.getCardType().toString(), "offer", offer));
-
-                var feilds = String.join(", ", offerData.keySet().stream()
-                        .map(field -> field + " = ?")
-                        .collect(Collectors.toList()));
-
-                switch (entity.getCardTypeEnum()) {
-                    case PREPAID:
-                        var stmt2 = conn.prepareStatement(
-                                "UPDATE " + PrepaidCard.TABLE_NAME + " SET " + feilds + " WHERE card_id = ?");
-
-                        int index2 = 1;
-                        for (Object value : offerData.values()) {
-                            stmt2.setObject(index2++, value);
-                        }
-                        stmt2.setObject(index2, entity.getId());
-                        stmt2.executeUpdate();
-                        break;
-                    case DEBIT:
-                        var stmt3 = conn.prepareStatement(
-                                "UPDATE " + DebitCard.TABLE_NAME + " SET " + feilds + " WHERE card_id = ?");
-                        int index3 = 1;
-                        for (Object value : offerData.values()) {
-                            stmt3.setObject(index3++, value);
-                        }
-                        stmt3.setObject(index3, entity.getId());
-                        stmt3.executeUpdate();
-                        break;
-                    case CREDIT:
-                        var stmt4 = conn.prepareStatement(
-                                "UPDATE " + CreditCard.TABLE_NAME + " SET " + feilds + " WHERE card_id = ?");
-                        int index4 = 1;
-                        for (Object value : offerData.values()) {
-                            stmt4.setObject(index4++, value);
-                        }
-                        stmt4.setObject(index4, entity.getId());
-                        stmt4.executeUpdate();
-                        break;
-                    default:
-                        break;
-                }
+                updateCardOffer(conn, entity, offer);
             }
-            Map<String, Object> mergedData = new HashMap<>(fieldsToUpdate);
-            mergedData.putAll(fieldsToUpdate);
 
+            // Return updated entity
+            Map<String, Object> mergedData = new HashMap<>(baseCardFields);
+            mergedData.putAll(subtypeFields);
+            mergedData.put("id", entity.getId());
             return Hydrator.mapRow(mergedData, entity.getClass());
         });
     }
 
+    /**
+     * Separates fields into base card fields and subtype-specific fields
+     */
+    private Map<String, Map<String, Object>> separateFields(CardType cardType, Map<String, Object> allFields) {
+        Map<String, Object> baseCardFields = new HashMap<>();
+        Map<String, Object> subtypeFields = new HashMap<>();
+        Set<String> subtypeFieldNames = getSubtypeFieldNames(cardType);
+
+        for (Map.Entry<String, Object> entry : new HashMap<>(allFields).entrySet()) {
+            String field = entry.getKey();
+            Object value = entry.getValue();
+
+            String snakeCase = utils.Hydrator.CaseConverter.camelToSnake(field);
+            if (subtypeFieldNames.contains(field) || subtypeFieldNames.contains(snakeCase)) {
+                subtypeFields.put(field, value);
+                allFields.remove(field); // Remove it from the original map
+            } else {
+                baseCardFields.put(field, value);
+            }
+        }
+
+        Map<String, Map<String, Object>> result = new HashMap<>();
+        result.put("base", baseCardFields);
+        result.put("subtype", subtypeFields);
+        return result;
+    }
+
+    /**
+     * Update fields in the base cards table
+     */
+    private void updateBaseCardFields(Connection conn, int cardId, Map<String, Object> fields) throws Exception {
+        if (fields.isEmpty())
+            return;
+
+        String setClause = setClauseOf(fields);
+        var stmt = conn.prepareStatement("UPDATE " + TABLE_NAME + " SET " + setClause + " WHERE id = ?");
+
+        int index = 1;
+        for (Object value : fields.values()) {
+            stmt.setObject(index++, value);
+        }
+        stmt.setObject(index, cardId);
+        stmt.executeUpdate();
+    }
+
+    /**
+     * Update fields in the subtype table
+     */
+    private void updateSubtypeFields(Connection conn, int cardId, CardType cardType,
+            Map<String, Object> fields) throws Exception {
+        if (fields.isEmpty())
+            return;
+
+        String subtableSetClause = setClauseOf(fields);
+        var subtypeStmt = conn.prepareStatement(
+                "UPDATE " + getTableNameByType(cardType) +
+                        " SET " + subtableSetClause +
+                        " WHERE card_id = ?");
+
+        int subtypeIndex = 1;
+        for (Object value : fields.values()) {
+            subtypeStmt.setObject(subtypeIndex++, value);
+        }
+        subtypeStmt.setObject(subtypeIndex, cardId);
+        subtypeStmt.executeUpdate();
+    }
+
+    /**
+     * Update card with a specific offer
+     */
+    private void updateCardOffer(Connection conn, Card entity, int offerId) throws Exception {
+        Map<String, Object> offerData = getOffer(Map.of(
+                "card_type", entity.getCardType().toString(),
+                "offer", offerId));
+
+        String offerSetClause = setClauseOf(offerData);
+        var offerStmt = conn.prepareStatement(
+                "UPDATE " + getTableNameByType(entity.getCardTypeEnum()) +
+                        " SET " + offerSetClause +
+                        " WHERE card_id = ?");
+
+        int offerIndex = 1;
+        for (Object value : offerData.values()) {
+            offerStmt.setObject(offerIndex++, value);
+        }
+        offerStmt.setObject(offerIndex, entity.getId());
+        offerStmt.executeUpdate();
+    }
+
+    // Helper method to get field names for specific card subtypes
+    private Set<String> getSubtypeFieldNames(CardType cardType) {
+        Set<String> fieldNames = new HashSet<>();
+
+        switch (cardType) {
+            case CREDIT:
+                fieldNames.add("monthly_limit");
+                fieldNames.add("monthlyLimit");
+                fieldNames.add("interest_rate");
+                fieldNames.add("interestRate");
+                break;
+            case DEBIT:
+                fieldNames.add("daily_limit");
+                fieldNames.add("dailyLimit");
+                break;
+            case PREPAID:
+                fieldNames.add("available_balance");
+                fieldNames.add("availableBalance");
+                break;
+        }
+
+        return fieldNames;
+    }
+
+    @Override
     public void deleteById(String id) {
         pipeline(() -> {
             var conn = connection.getConnection();
-            var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME + " WHERE id = ?");
-            stmt.setString(1, id);
-            var rs = stmt.executeQuery();
-            if (!rs.next())
-                throw new NoSuchElementException("No card with id " + id);
+            var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE id = ?", id);
 
-            CardType ct = CardType.valueOf(rs.getString("card_type"));
-            switch (ct) {
-                case PREPAID:
-                    var stmt2 = conn.prepareStatement("DELETE FROM " + PrepaidCard.TABLE_NAME + " WHERE card_id = ?");
-                    stmt2.setString(1, id);
-                    stmt2.executeUpdate();
-                    break;
-                case DEBIT:
-                    var stmt3 = conn.prepareStatement("DELETE FROM " + DebitCard.TABLE_NAME + " WHERE card_id = ?");
-                    stmt3.setString(1, id);
-                    stmt3.executeUpdate();
-                    break;
-                case CREDIT:
-                    var stmt4 = conn.prepareStatement("DELETE FROM " + CreditCard.TABLE_NAME + " WHERE card_id = ?");
-                    stmt4.setString(1, id);
-                    stmt4.executeUpdate();
-                    break;
-                default:
-                    throw new NoSuchElementException("no such type");
+            if (!rs.next()) {
+                throw new NoSuchElementException("No card with id " + id);
             }
-            var stmt5 = conn.prepareStatement("DELETE FROM " + TABLE_NAME + " WHERE id = ?");
-            stmt5.setString(1, id);
-            stmt5.executeUpdate();
+
+            // Delete from subtype table first
+            CardType ct = CardType.valueOf(rs.getString("card_type"));
+            String subtypeTable = getTableNameByType(ct);
+
+            executeUpdate(conn, "DELETE FROM " + subtypeTable + " WHERE card_id = ?", id);
+
+            // Then delete from base table
+            executeUpdate(conn, "DELETE FROM " + TABLE_NAME + " WHERE id = ?", id);
         });
+    }
+
+    /**
+     * Helper method to execute updates
+     */
+    private int executeUpdate(Connection conn, String sql, Object... params) throws Exception {
+        var stmt = conn.prepareStatement(sql);
+        for (int i = 0; i < params.length; i++) {
+            stmt.setObject(i + 1, params[i]);
+        }
+        return stmt.executeUpdate();
     }
 }

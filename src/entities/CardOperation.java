@@ -12,8 +12,12 @@ public record CardOperation(
         String type,
         String location,
         int cardId) {
-    public static final String TABLE_NAME = "card_operations";
 
+    public CardOperation(String id, LocalDateTime date, double amount, String type, String location, int cardId) {
+        this(UUID.fromString(id), date, amount, type, location, cardId);
+    }
+
+    // Simple constructor that generates a UUID automatically
     public CardOperation(LocalDateTime date, double amount, String type, String location, int cardId) {
         this(UUID.randomUUID(), date, amount, type, location, cardId);
     }
@@ -21,6 +25,11 @@ public record CardOperation(
     // Constructor with enum for business logic convenience
     public CardOperation(LocalDateTime date, double amount, OperationType type, String location, int cardId) {
         this(UUID.randomUUID(), date, amount, type.name(), location, cardId);
+    }
+
+    public CardOperation(String id, LocalDateTime date, double amount, OperationType type, String location,
+            int cardId) {
+        this(UUID.fromString(id), date, amount, type.name(), location, cardId);
     }
 
     public OperationType getTypeEnum() {

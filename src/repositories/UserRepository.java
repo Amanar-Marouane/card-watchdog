@@ -1,11 +1,9 @@
 package repositories;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import entities.User;
 import services.DBConnection;
@@ -51,17 +49,12 @@ public class UserRepository implements RepositoryBase<User> {
     public User create(Map<String, Object> data) {
         return pipeline(() -> {
             // Exclude ID if present
-            Map<String, Object> filteredData = data.entrySet().stream()
-                    .filter(e -> !"id".equals(e.getKey()))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            Map<String, Object> filteredData = filterToCOU(data);
             var conn = connectionService.getConnection();
 
-            // Build field list and binding template
-            String fields = "(" + String.join(", ", filteredData.keySet()) + ")";
-            String bindingTemplate = "(" + String.join(", ", Collections.nCopies(filteredData.size(), "?")) + ")";
-
             var stmt = conn.prepareStatement(
-                    "INSERT INTO " + TABLE_NAME + " " + fields + " VALUES " + bindingTemplate,
+                    "INSERT INTO " + TABLE_NAME + " " + fieldsOf(filteredData) + " VALUES "
+                            + bindingTemplateOf(filteredData),
                     java.sql.Statement.RETURN_GENERATED_KEYS);
 
             // Set parameters
@@ -96,26 +89,18 @@ public class UserRepository implements RepositoryBase<User> {
     }
 
     @Override
-    public void updateById(User user, Map<String, Object> fieldsToUpdate) {
+    public void update(User user, Map<String, Object> fieldsToUpdate) {
         final User[] userRef = { user };
 
-        fieldsToUpdate.remove("id"); // prevent ID modification
-        if (fieldsToUpdate.isEmpty())
-            return;
-
         userRef[0] = pipeline(() -> {
+            Map<String, Object> filteredData = filterToCOU(fieldsToUpdate);
             var conn = connectionService.getConnection();
 
-            // Build SET clause
-            var setClause = fieldsToUpdate.keySet().stream()
-                    .map(field -> field + " = ?")
-                    .collect(Collectors.joining(", "));
-
             var stmt = conn.prepareStatement(
-                    "UPDATE " + TABLE_NAME + " SET " + setClause + " WHERE id = ?");
+                    "UPDATE " + TABLE_NAME + " SET " + setClauseOf(filteredData) + " WHERE id = ?");
 
             int index = 1;
-            for (Object value : fieldsToUpdate.values()) {
+            for (Object value : filteredData.values()) {
                 stmt.setObject(index++, value);
             }
             stmt.setObject(index, user.id());
@@ -123,8 +108,8 @@ public class UserRepository implements RepositoryBase<User> {
             stmt.executeUpdate();
 
             // Return updated immutable user
-            fieldsToUpdate.put("id", user.id());
-            return Hydrator.mapRow(fieldsToUpdate, User.class);
+            filteredData.put("id", user.id());
+            return Hydrator.mapRow(filteredData, User.class);
         });
     }
 

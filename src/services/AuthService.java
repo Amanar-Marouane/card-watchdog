@@ -19,7 +19,7 @@ public class AuthService {
 
     public boolean register(String fullName, String email, String phoneNumber) {
         if (this.authenticated) {
-            Console.warning("You must log out first before registering a new account.");
+            Console.warn("You must log out first before registering a new account.");
             return false;
         }
 
@@ -45,7 +45,7 @@ public class AuthService {
 
     public boolean login(String email) {
         if (this.authenticated) {
-            Console.warning("You are already logged in. Please log out first.");
+            Console.warn("You are already logged in. Please log out first.");
             return false;
         }
 

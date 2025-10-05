@@ -79,7 +79,7 @@ public class CardService {
         Card card = cardOpt.get();
         Map<String, Object> updateData = new HashMap<>();
         updateData.put("status", CardStatus.ACTIVE.name());
-        cardRepository.updateById(card, updateData);
+        cardRepository.update(card, updateData);
     }
 
     public void suspendCard(String cardId) throws Exception {
@@ -91,7 +91,7 @@ public class CardService {
         Card card = cardOpt.get();
         Map<String, Object> updateData = new HashMap<>();
         updateData.put("status", CardStatus.SUSPENDED.name());
-        cardRepository.updateById(card, updateData);
+        cardRepository.update(card, updateData);
     }
 
     public void blockCard(String cardId) throws Exception {
@@ -103,7 +103,7 @@ public class CardService {
         Card card = cardOpt.get();
         Map<String, Object> updateData = new HashMap<>();
         updateData.put("status", CardStatus.BLOCKED.name());
-        cardRepository.updateById(card, updateData);
+        cardRepository.update(card, updateData);
     }
 
     public void renewCard(String cardId) throws Exception {
@@ -116,7 +116,7 @@ public class CardService {
         Map<String, Object> updateData = new HashMap<>();
         updateData.put("expiration_date", generateExpirationDate());
         updateData.put("status", CardStatus.ACTIVE.name());
-        cardRepository.updateById(card, updateData);
+        cardRepository.update(card, updateData);
     }
 
     public void deleteCard(String cardId) {
