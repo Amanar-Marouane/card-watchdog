@@ -32,7 +32,7 @@ public class AuthController {
         HashMap<String, String> registry = new HashMap<>();
 
         registry.put("email", this.emailAttempt());
-        registry.put("phone_number", this.phoneNumberAttempt());
+        registry.put("phoneNumber", this.phoneNumberAttempt());
         registry.put("fullName", this.fullNameAttempt());
 
         return registry;
@@ -74,7 +74,7 @@ public class AuthController {
         HashMap<String, String> register = this.registerAttempt();
         String fullName = register.get("fullName");
         String email = register.get("email");
-        String phoneNumber = register.get("phone_number");
+        String phoneNumber = register.get("phoneNumber");
 
         authService.register(fullName, email, phoneNumber);
     }
@@ -97,7 +97,7 @@ public class AuthController {
         Console.info("User ID   : " + user.id());
         Console.info("Full Name : " + user.name());
         Console.info("Email     : " + user.email());
-        Console.info("Phone     : " + user.phone_number());
+        Console.info("Phone     : " + user.phoneNumber());
         Console.line();
     }
 }

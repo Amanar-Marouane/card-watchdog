@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import entities.Card;
 import entities.CreditCard;
@@ -25,9 +24,7 @@ public class CardService {
     }
 
     public List<Card> getUserCards(int userId) {
-        return cardRepository.findAll().stream()
-                .filter(card -> card.getUserId() == userId)
-                .collect(Collectors.toList());
+        return cardRepository.findAllByUserId(String.valueOf(userId));
     }
 
     public Optional<Card> getCardById(String cardId) {

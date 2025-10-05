@@ -14,8 +14,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import entities.Card;
 import entities.CreditCard;
@@ -23,76 +21,6 @@ import entities.DebitCard;
 import entities.PrepaidCard;
 
 public class Hydrator {
-    public static class CaseConverter {
-        // Convert from snake_case to camelCase
-        public static String snakeToCamel(String snake) {
-            if (snake == null || snake.isEmpty()) {
-                return snake;
-            }
-
-            // Use regex to find all occurrences of underscore followed by a character
-            Pattern pattern = Pattern.compile("_([a-zA-Z])");
-            Matcher matcher = pattern.matcher(snake);
-            StringBuffer sb = new StringBuffer();
-
-            // Replace each _x with X (uppercase)
-            while (matcher.find()) {
-                matcher.appendReplacement(sb, matcher.group(1).toUpperCase());
-            }
-            matcher.appendTail(sb);
-
-            return sb.toString();
-        }
-
-        // Convert from camelCase to snake_case
-        public static String camelToSnake(String camel) {
-            if (camel == null || camel.isEmpty()) {
-                return camel;
-            }
-
-            // Replace each uppercase letter with _lowercase
-            String result = camel.replaceAll("([A-Z])", "_$1").toLowerCase();
-
-            // Handle case where the string starts with an underscore due to first char
-            // being uppercase
-            return result.startsWith("_") ? result.substring(1) : result;
-        }
-
-        // Find corresponding field name using case conversion if direct match fails
-        public static String findMatchingFieldName(String columnName, Class<?> clazz) {
-            // First try direct match
-            try {
-                clazz.getDeclaredField(columnName);
-                return columnName;
-            } catch (NoSuchFieldException e) {
-                // Try camelCase version
-                String camelCase = snakeToCamel(columnName);
-                try {
-                    clazz.getDeclaredField(camelCase);
-                    return camelCase;
-                } catch (NoSuchFieldException e2) {
-                    // Try in superclass
-                    Class<?> superClass = clazz.getSuperclass();
-                    if (superClass != null) {
-                        try {
-                            superClass.getDeclaredField(columnName);
-                            return columnName;
-                        } catch (NoSuchFieldException e3) {
-                            try {
-                                superClass.getDeclaredField(camelCase);
-                                return camelCase;
-                            } catch (NoSuchFieldException e4) {
-                                // Not found in class or superclass
-                                return null;
-                            }
-                        }
-                    }
-                    return null;
-                }
-            }
-        }
-    }
-
     /**
      * Cast a value to the target type, handling common Java types
      * 
@@ -100,190 +28,95 @@ public class Hydrator {
      * @param targetType The target type class
      * @return The cast value
      */
-    @SuppressWarnings("all")
     public static Object castValueToType(Object value, Class<?> targetType) {
         if (value == null) {
             return null;
         }
 
-        // Handle primitive types and their wrappers
-        if (targetType == int.class || targetType == Integer.class) {
-            if (value instanceof Number) {
-                return ((Number) value).intValue();
-            } else {
-                return Integer.parseInt(value.toString());
-            }
-        } else if (targetType == long.class || targetType == Long.class) {
-            if (value instanceof Number) {
-                return ((Number) value).longValue();
-            } else {
-                return Long.parseLong(value.toString());
-            }
-        } else if (targetType == double.class || targetType == Double.class) {
-            if (value instanceof Number) {
-                return ((Number) value).doubleValue();
-            } else {
-                return Double.parseDouble(value.toString());
-            }
-        } else if (targetType == float.class || targetType == Float.class) {
-            if (value instanceof Number) {
-                return ((Number) value).floatValue();
-            } else {
-                return Float.parseFloat(value.toString());
-            }
-        } else if (targetType == short.class || targetType == Short.class) {
-            if (value instanceof Number) {
-                return ((Number) value).shortValue();
-            } else {
-                return Short.parseShort(value.toString());
-            }
-        } else if (targetType == byte.class || targetType == Byte.class) {
-            if (value instanceof Number) {
-                return ((Number) value).byteValue();
-            } else {
-                return Byte.parseByte(value.toString());
-            }
-        } else if (targetType == boolean.class || targetType == Boolean.class) {
-            if (value instanceof Boolean) {
-                return value;
-            } else {
-                return Boolean.parseBoolean(value.toString());
-            }
-        } else if (targetType == char.class || targetType == Character.class) {
-            if (value instanceof Character) {
-                return value;
-            } else {
-                String str = value.toString();
-                return str.isEmpty() ? '\0' : str.charAt(0);
-            }
-        }
-        // Handle String type
-        else if (targetType == String.class) {
-            return value.toString();
-        }
-        // Handle UUID type
-        else if (targetType == UUID.class) {
-            if (value instanceof UUID) {
-                return value;
-            } else {
-                return UUID.fromString(value.toString());
-            }
-        }
-        // Handle date/time types
-        else if (targetType == LocalDateTime.class) {
-            if (value instanceof LocalDateTime) {
-                return value;
-            } else if (value instanceof java.sql.Timestamp) {
-                return ((java.sql.Timestamp) value).toLocalDateTime();
-            } else if (value instanceof Date) {
-                return ((Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
-            }
-        } else if (targetType == LocalDate.class) {
-            if (value instanceof LocalDate) {
-                return value;
-            } else if (value instanceof java.sql.Date) {
-                return ((java.sql.Date) value).toLocalDate();
-            } else if (value instanceof Date) {
-                return ((Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
-            }
-        } else if (targetType == LocalTime.class) {
-            if (value instanceof LocalTime) {
-                return value;
-            } else if (value instanceof java.sql.Time) {
-                return ((java.sql.Time) value).toLocalTime();
-            }
-        }
-        // Handle BigDecimal
-        else if (targetType == BigDecimal.class) {
-            if (value instanceof BigDecimal) {
-                return value;
-            } else if (value instanceof Number) {
-                return new BigDecimal(value.toString());
-            } else {
-                return new BigDecimal(value.toString());
-            }
-        }
-        // Handle enums
-        else if (targetType.isEnum()) {
-            return Enum.valueOf((Class<Enum>) targetType, value.toString());
-        }
-
-        // Default case: return the value if it's already assignable to the target type
+        // If value is already assignable to target type, return it directly
         if (targetType.isAssignableFrom(value.getClass())) {
             return value;
         }
 
-        // If we can't cast, return the original value
+        // Use switch for better performance
+        switch (targetType.getName()) {
+            // Primitive types and wrappers
+            case "int":
+            case "java.lang.Integer":
+                return value instanceof Number ? ((Number) value).intValue() : Integer.parseInt(value.toString());
+
+            case "long":
+            case "java.lang.Long":
+                return value instanceof Number ? ((Number) value).longValue() : Long.parseLong(value.toString());
+
+            case "double":
+            case "java.lang.Double":
+                return value instanceof Number ? ((Number) value).doubleValue() : Double.parseDouble(value.toString());
+
+            case "float":
+            case "java.lang.Float":
+                return value instanceof Number ? ((Number) value).floatValue() : Float.parseFloat(value.toString());
+
+            case "short":
+            case "java.lang.Short":
+                return value instanceof Number ? ((Number) value).shortValue() : Short.parseShort(value.toString());
+
+            case "byte":
+            case "java.lang.Byte":
+                return value instanceof Number ? ((Number) value).byteValue() : Byte.parseByte(value.toString());
+
+            case "boolean":
+            case "java.lang.Boolean":
+                return value instanceof Boolean ? value : Boolean.parseBoolean(value.toString());
+
+            case "char":
+            case "java.lang.Character":
+                if (value instanceof Character)
+                    return value;
+                String str = value.toString();
+                return str.isEmpty() ? '\0' : str.charAt(0);
+
+            // Common reference types
+            case "java.lang.String":
+                return value.toString();
+
+            case "java.util.UUID":
+                return value instanceof UUID ? value : UUID.fromString(value.toString());
+
+            case "java.time.LocalDateTime":
+                if (value instanceof LocalDateTime)
+                    return value;
+                if (value instanceof java.sql.Timestamp)
+                    return ((java.sql.Timestamp) value).toLocalDateTime();
+                if (value instanceof Date)
+                    return ((Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
+                break;
+
+            case "java.time.LocalDate":
+                if (value instanceof LocalDate)
+                    return value;
+                if (value instanceof java.sql.Date)
+                    return ((java.sql.Date) value).toLocalDate();
+                if (value instanceof Date)
+                    return ((Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+                break;
+
+            case "java.time.LocalTime":
+                if (value instanceof LocalTime)
+                    return value;
+                if (value instanceof java.sql.Time)
+                    return ((java.sql.Time) value).toLocalTime();
+                break;
+
+            case "java.math.BigDecimal":
+                if (value instanceof BigDecimal)
+                    return value;
+                return new BigDecimal(value.toString());
+        }
+
+        // If we can't cast, log warning and return the original value
         Console.warn("Could not cast value of type " + value.getClass() + " to " + targetType);
         return value;
-    }
-
-    public static <T> T mapRow(ResultSet rs, Class<T> clazz) throws Exception {
-        ResultSetMetaData meta = rs.getMetaData();
-
-        // Handle records
-        if (clazz.isRecord()) {
-            var recordComponents = clazz.getRecordComponents();
-            var constructor = clazz.getDeclaredConstructor(
-                    Arrays.stream(recordComponents)
-                            .map(RecordComponent::getType)
-                            .toArray(Class[]::new));
-
-            Object[] args = Arrays.stream(recordComponents)
-                    .map(c -> {
-                        try {
-                            Class<?> fieldType = c.getType();
-                            Object value;
-
-                            // Try direct column
-                            try {
-                                value = rs.getObject(c.getName());
-                            } catch (SQLException e) {
-                                // Fallback to snake_case
-                                String snakeCase = CaseConverter.camelToSnake(c.getName());
-                                value = rs.getObject(snakeCase);
-                            }
-
-                            // Cast to the correct type
-                            return castValueToType(value, fieldType);
-                        } catch (SQLException e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
-                    .toArray();
-
-            return (T) constructor.newInstance(args);
-        }
-
-        // Special handling for Card subclasses
-        if (Card.class.isAssignableFrom(clazz)) {
-            return createCardInstance(toMap(rs), clazz);
-        }
-
-        // Default class handling
-        T obj = clazz.getDeclaredConstructor().newInstance();
-        int columnCount = meta.getColumnCount();
-
-        for (int i = 1; i <= columnCount; i++) {
-            String columnName = meta.getColumnLabel(i);
-            Object value = rs.getObject(i);
-
-            // Find matching field
-            String fieldName = CaseConverter.findMatchingFieldName(columnName, clazz);
-            if (fieldName != null) {
-                try {
-                    Field field = findField(clazz, fieldName);
-                    if (field != null) {
-                        field.setAccessible(true);
-                        field.set(obj, castValueToType(value, field.getType()));
-                    }
-                } catch (NoSuchFieldException ignored) {
-                    // already checked by findMatchingFieldName
-                }
-            }
-        }
-
-        return obj;
     }
 
     public static <T> T mapRow(Map<String, Object> data, Class<T> clazz) throws Exception {

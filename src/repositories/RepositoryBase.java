@@ -1,5 +1,7 @@
 package repositories;
 
+import java.sql.Connection;
+import java.sql.ResultSet;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,22 @@ public interface RepositoryBase<T> {
         return data.keySet().stream()
                 .map(field -> field + " = ?")
                 .collect(Collectors.joining(", "));
+    }
+
+    default ResultSet executeQuery(Connection conn, String sql, Object... params) throws Exception {
+        var stmt = conn.prepareStatement(sql);
+        for (int i = 0; i < params.length; i++) {
+            stmt.setObject(i + 1, params[i]);
+        }
+        return stmt.executeQuery();
+    }
+
+    default int executeUpdate(Connection conn, String sql, Object... params) throws Exception {
+        var stmt = conn.prepareStatement(sql);
+        for (int i = 0; i < params.length; i++) {
+            stmt.setObject(i + 1, params[i]);
+        }
+        return stmt.executeUpdate();
     }
 
     /**

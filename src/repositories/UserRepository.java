@@ -21,11 +21,9 @@ public class UserRepository implements RepositoryBase<User> {
     public Optional<User> findById(String id) {
         return pipeline(() -> {
             var conn = connectionService.getConnection();
-            var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME + " WHERE id = ? LIMIT 1");
-            stmt.setString(1, id);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE id = ? LIMIT 1", id);
             if (rs.next()) {
-                return Optional.ofNullable(Hydrator.mapRow(rs, User.class));
+                return Optional.ofNullable(Hydrator.mapRow(Hydrator.toMap(rs), User.class));
             }
             return Optional.empty();
         });
@@ -35,11 +33,10 @@ public class UserRepository implements RepositoryBase<User> {
     public List<User> findAll() {
         return pipeline(() -> {
             var conn = connectionService.getConnection();
-            var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME);
             List<User> users = new ArrayList<>();
             while (rs.next()) {
-                users.add(Hydrator.mapRow(rs, User.class));
+                users.add(Hydrator.mapRow(Hydrator.toMap(rs), User.class));
             }
             return users;
         });
@@ -82,9 +79,7 @@ public class UserRepository implements RepositoryBase<User> {
     public void deleteById(String id) {
         pipeline(() -> {
             var conn = connectionService.getConnection();
-            var stmt = conn.prepareStatement("DELETE FROM " + TABLE_NAME + " WHERE id = ?");
-            stmt.setString(1, id);
-            stmt.executeUpdate();
+            executeUpdate(conn, "DELETE FROM " + TABLE_NAME + " WHERE id = ?", id);
         });
     }
 
@@ -116,11 +111,9 @@ public class UserRepository implements RepositoryBase<User> {
     public Optional<User> findByEmail(String email) {
         return pipeline(() -> {
             var conn = connectionService.getConnection();
-            var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME + " WHERE email = ? LIMIT 1");
-            stmt.setString(1, email);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE email = ? LIMIT 1", email);
             if (rs.next()) {
-                return Optional.of(Hydrator.mapRow(rs, User.class));
+                return Optional.of(Hydrator.mapRow(Hydrator.toMap(rs), User.class));
             }
             return Optional.empty();
         });

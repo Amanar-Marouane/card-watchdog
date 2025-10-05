@@ -23,12 +23,9 @@ public class CardOperationRepository implements RepositoryBase<CardOperation> {
     public Optional<CardOperation> findById(String id) {
         return pipeline(() -> {
             var conn = connection.getConnection();
-            var stmt = conn.prepareStatement("SELECT * from " + TABLE_NAME + " WHERE id = ? LIMIT 1"); // Fixed typo in
-                                                                                                       // SQL
-            stmt.setString(1, id);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * from " + TABLE_NAME + " WHERE id = ? LIMIT 1", id);
             if (rs.next())
-                return Optional.of(Hydrator.mapRow(rs, CardOperation.class));
+                return Optional.of(Hydrator.mapRow(Hydrator.toMap(rs), CardOperation.class));
             return Optional.empty();
         });
     }
@@ -37,11 +34,10 @@ public class CardOperationRepository implements RepositoryBase<CardOperation> {
     public List<CardOperation> findAll() {
         return pipeline(() -> {
             var conn = connection.getConnection();
-            var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME);
             ArrayList<CardOperation> co = new ArrayList<>();
             while (rs.next()) {
-                co.add(Hydrator.mapRow(rs, CardOperation.class));
+                co.add(Hydrator.mapRow(Hydrator.toMap(rs), CardOperation.class));
             }
             return co;
         });
@@ -77,9 +73,7 @@ public class CardOperationRepository implements RepositoryBase<CardOperation> {
     public void deleteById(String id) {
         pipeline(() -> {
             var conn = connection.getConnection();
-            var stmt = conn.prepareStatement("DELETE FROM " + TABLE_NAME + " WHERE id = ?");
-            stmt.setString(1, id);
-            stmt.executeUpdate();
+            executeUpdate(conn, "DELETE FROM " + TABLE_NAME + " WHERE id = ?", id);
         });
     }
 
@@ -106,13 +100,11 @@ public class CardOperationRepository implements RepositoryBase<CardOperation> {
     public List<CardOperation> findCardOperationsOf(String cardId) {
         return pipeline(() -> {
             var conn = connection.getConnection();
-            var stmt = conn.prepareStatement("SELECT * FROM " + TABLE_NAME + " WHERE card_id = ?");
-            stmt.setString(1, cardId);
-            var rs = stmt.executeQuery();
+            var rs = executeQuery(conn, "SELECT * FROM " + TABLE_NAME + " WHERE card_id = ?", cardId);
             ArrayList<CardOperation> co = new ArrayList<>();
             while (rs.next()) {
                 try {
-                    CardOperation operation = Hydrator.mapRow(rs, CardOperation.class);
+                    CardOperation operation = Hydrator.mapRow(Hydrator.toMap(rs), CardOperation.class);
                     co.add(operation);
                 } catch (Exception e) {
                     // Log the error but continue processing other operations

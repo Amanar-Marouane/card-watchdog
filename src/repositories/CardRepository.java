@@ -17,6 +17,7 @@ import entities.DebitCard;
 import entities.PrepaidCard;
 import enums.CardType;
 import services.DBConnection;
+import utils.CaseConverter;
 import utils.Console;
 import utils.Hydrator;
 
@@ -86,17 +87,6 @@ public class CardRepository implements RepositoryBase<Card> {
                 throw new NoSuchElementException("No sub type found for card with id " + id);
             }
         });
-    }
-
-    /**
-     * Helper method to execute a query with parameters
-     */
-    private ResultSet executeQuery(Connection conn, String sql, Object... params) throws Exception {
-        var stmt = conn.prepareStatement(sql);
-        for (int i = 0; i < params.length; i++) {
-            stmt.setObject(i + 1, params[i]);
-        }
-        return stmt.executeQuery();
     }
 
     @Override
@@ -263,7 +253,7 @@ public class CardRepository implements RepositoryBase<Card> {
             String field = entry.getKey();
             Object value = entry.getValue();
 
-            String snakeCase = utils.Hydrator.CaseConverter.camelToSnake(field);
+            String snakeCase = CaseConverter.camelToSnake(field);
             if (subtypeFieldNames.contains(field) || subtypeFieldNames.contains(snakeCase)) {
                 subtypeFields.put(field, value);
                 allFields.remove(field); // Remove it from the original map
@@ -385,14 +375,16 @@ public class CardRepository implements RepositoryBase<Card> {
         });
     }
 
-    /**
-     * Helper method to execute updates
-     */
-    private int executeUpdate(Connection conn, String sql, Object... params) throws Exception {
-        var stmt = conn.prepareStatement(sql);
-        for (int i = 0; i < params.length; i++) {
-            stmt.setObject(i + 1, params[i]);
-        }
-        return stmt.executeUpdate();
+    public List<Card> findAllByUserId(String userId) {
+        return pipeline(() -> {
+            var conn = connection.getConnection();
+            var rs = executeQuery(conn, "SELECT * from " + TABLE_NAME + " WHERE user_id = ?", userId);
+            List<Card> cards = new ArrayList<>();
+
+            while (rs.next()) {
+                cards.add(createCardFromResultSet(conn, rs));
+            }
+            return cards;
+        });
     }
 }
